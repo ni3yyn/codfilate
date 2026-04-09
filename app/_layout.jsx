@@ -125,14 +125,14 @@ const errorStyles = StyleSheet.create({
   },
 });
 
-function DiagnosticScreen() {
+function DiagnosticScreen({ title, subtitle }) {
   const info = appConfig.debugInfo;
   return (
     <View style={[diagnosticStyles.container, { backgroundColor: '#0A0A1A' }]}>
       <View style={diagnosticStyles.card}>
         <Ionicons name="bug" size={48} color="#FF7675" />
-        <Text style={diagnosticStyles.title}>تنبيه: خطأ في التهيئة</Text>
-        <Text style={diagnosticStyles.subtitle}>التطبيق غير مهيأ بشكل صحيح للعمل في بيئة الإنتاج.</Text>
+        <Text style={diagnosticStyles.title}>{title || 'تنبيه: خطأ في التهيئة'}</Text>
+        <Text style={diagnosticStyles.subtitle}>{subtitle || 'التطبيق غير مهيأ بشكل صحيح للعمل في بيئة الإنتاج.'}</Text>
         
         <View style={diagnosticStyles.logs}>
           <Text style={diagnosticStyles.logLine}>• Constants.expoConfig: {info.hasConstants ? '✅ OK' : '❌ Missing'}</Text>
@@ -210,14 +210,23 @@ export default function RootLayout() {
   });
 
   const [securityStatus, setSecurityStatus] = React.useState({ isSecure: true, threats: [] });
+  const [initError, setInitError] = React.useState(null);
 
   useEffect(() => {
-    initialize();
+    async function startApp() {
+      try {
+        await initialize();
+        
+        // STB-4: Perform security audit safely
+        const res = await securityShield.checkEnvironment();
+        setSecurityStatus(res);
+      } catch (err) {
+        console.warn('[RootLayout] Init failed:', err);
+        setInitError(err);
+      }
+    }
     
-    // Perform security audit on startup
-    securityShield.checkEnvironment().then(res => {
-      setSecurityStatus(res);
-    });
+    startApp();
   }, []);
 
   // Reset navigation guard when auth state changes significantly
@@ -283,6 +292,11 @@ export default function RootLayout() {
   // SECURITY CHECK: If app is running in a compromised environment, halt execution
   if (!securityStatus.isSecure && !__DEV__) {
     return <SecurityBreachScreen threats={securityStatus.threats} />;
+  }
+
+  // STB-5: Catch initialization fatal errors
+  if (initError && !__DEV__) {
+    return <DiagnosticScreen title="خطأ فادح في البداية" subtitle={initError.message} />;
   }
 
   return (

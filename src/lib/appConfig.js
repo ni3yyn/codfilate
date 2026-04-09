@@ -6,11 +6,13 @@
 
 import Constants from 'expo-constants';
 
-const rawConfig = Constants.expoConfig || Constants.manifest2?.extra?.expoConfig || {};
-const customerConfig = rawConfig.extra?.customerConfig || {};
+// Safe extraction of manifest - even if Constants is weirdly shaped
+const rawConfig = Constants?.expoConfig || Constants?.manifest2?.extra?.expoConfig || Constants?.manifest || {};
+const extraState = rawConfig?.extra || Constants?.manifest2?.extra || {};
+const customerConfig = extraState?.customerConfig || {};
 
-if (!rawConfig.extra?.customerConfig && !__DEV__) {
-  console.warn('[AppConfig] No customer configuration found in production manifest.');
+if (!customerConfig.appName && !__DEV__) {
+  console.warn('[AppConfig] Critical: No customer configuration found in manifest.');
 }
 
 export const appConfig = {

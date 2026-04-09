@@ -25,14 +25,52 @@ const customStorage = Platform.OS === 'web' ? {
   }
 } : AsyncStorage;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: customStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// Use a lazy getter for the Supabase client to prevent top-level crashes
+// during the module evaluation phase (STB-2 fix).
+let _supabaseInstance = null;
+
+export const getSupabase = () => {
+  if (_supabaseInstance) return _supabaseInstance;
+
+  try {
+    if (!appConfig.isConfigured) {
+      throw new Error('Supabase not configured');
+    }
+
+    _supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: customStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
+
+    return _supabaseInstance;
+  } catch (error) {
+    if (__DEV__) console.warn('[Supabase] Initialization failed, using safe fallback:', error);
+    
+    // Return a safe 'No-Op' proxy object to prevent undefined property errors elsewhere
+    return {
+      auth: { 
+        getUser: async () => ({ data: { user: null }, error: null }),
+        getSession: async () => ({ data: { session: null }, error: null }),
+        signInWithPassword: async () => ({ error: { message: 'Supabase Not Configured' } }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        startAutoRefresh: () => {},
+        stopAutoRefresh: () => {},
+        signOut: async () => {},
+      },
+      from: () => ({
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+        update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }) }),
+      })
+    };
+  }
+};
+
+// Export as a getter-property for compatibility with existing code
+export const supabase = getSupabase();
 
 // Tells Supabase Auth to continuously refresh the session automatically
 // if the app is in the foreground.

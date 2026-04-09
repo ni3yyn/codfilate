@@ -1,11 +1,24 @@
-import * as Device from 'expo-device';
-import { Platform, NativeModules } from 'react-native';
+// Import Platform only at top level (Safe)
+import { Platform } from 'react-native';
 
 /**
- * Advanced Security Shield for Codfilate
- * Implements anti-debugging, root detection, and environment hardening.
+ * Advanced Security Shield for Codfilate 
+ * (STB-3: Lazy Initialization for stability)
  */
 export const securityShield = {
+  _deviceModule: null,
+
+  async _getDevice() {
+    if (this._deviceModule) return this._deviceModule;
+    try {
+      // Lazy import to prevent top-level native mismatch crashes
+      this._deviceModule = require('expo-device');
+      return this._deviceModule;
+    } catch (e) {
+      console.warn('[Security] expo-device not found in binary');
+      return null;
+    }
+  },
   /**
    * Performs a comprehensive security check of the device environment.
    * Returns a report with any detected threats.
@@ -16,32 +29,31 @@ export const securityShield = {
       return { isSecure: true, threats: [] };
     }
 
+    const Device = await this._getDevice();
     const threats = [];
 
     try {
-      // 1. Root/Jailbreak Detection (Using expo-device)
-      const isRooted = await Device.isRootedExperimentalAsync();
-      if (isRooted) {
-        threats.push('COMPROMISED_OS'); // Device is rooted or jailbroken
+      // 1. Root/Jailbreak Detection
+      if (Device) {
+        const isRooted = await Device.isRootedExperimentalAsync();
+        if (isRooted) {
+          threats.push('COMPROMISED_OS');
+        }
+
+        // 2. Emulator Detection (Optional but recommended for anti-reversing)
+        if (!Device.isDevice && Platform.OS !== 'web') {
+          threats.push('EMULATOR_DETECTED');
+        }
       }
 
-      // 2. Debugger Detection
-      // We check if a debugger is attached via NativeModules or global state
+      // 3. Debugger Detection
       const isDebuggerAttached = this._isDebuggerActive();
       if (isDebuggerAttached) {
         threats.push('DEBUGGER_ATTACHED');
       }
 
-      // 3. Emulator Detection (Optional but recommended for anti-reversing)
-      // Most reverse engineering starts in an emulator.
-      if (!Device.isDevice && Platform.OS !== 'web') {
-        threats.push('EMULATOR_DETECTED');
-      }
-
     } catch (error) {
       console.warn('[Security] Check failed:', error);
-      // In high-security apps, we might fail-closed here, 
-      // but for an MVP we'll just log and continue unless a threat is confirmed.
     }
 
     return {
