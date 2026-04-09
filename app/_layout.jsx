@@ -16,6 +16,8 @@ import { useAuthStore } from '../src/stores/useAuthStore';
 import { usePushRegistration } from '../src/hooks/usePushNotifications';
 import { useThemeStore } from '../src/stores/useThemeStore';
 import { useAlertStore } from '../src/stores/useAlertStore';
+import GlobalAlert from '../src/components/ui/GlobalAlert';
+import { getHomeForRole } from '../src/lib/roleRouter';
 import { colors, typography, spacing, borderRadius } from '../src/theme/theme';
 import { appConfig } from '../src/lib/appConfig';
 import { securityShield } from '../src/lib/security.js';
