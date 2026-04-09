@@ -35,10 +35,10 @@ jobs:
         run: yarn install
 
       - name: 🚀 Build APK
-        run: npx eas-cli build --platform android --profile preview --local --non-interactive --output=./dist/app-preview.apk
+        run: npx eas-cli build --platform android --profile preview --local --non-interactive
 
       - name: 📤 Upload APK as Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: ./dist/app-preview.apk
+          path: android/app/build/outputs/apk/release/*.apk

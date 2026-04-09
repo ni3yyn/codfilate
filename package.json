@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.101.1",
     "expo": "^55.0.9",
     "expo-blur": "~55.0.10",
+    "expo-build-properties": "^55.0.13",
     "expo-clipboard": "~55.0.9",
     "expo-constants": "~55.0.10",
     "expo-device": "~55.0.7",
