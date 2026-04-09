@@ -22,9 +22,11 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0A1A"
       },
+      "allowBackup": false,
       "edgeToEdgeEnabled": true,
       "package": "com.codfilate.app"
     },
+    "jsEngine": "hermes",
     "web": {
       "favicon": "./assets/favicon.png"
     },

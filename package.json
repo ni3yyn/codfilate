@@ -38,8 +38,6 @@
     "react-native-svg": "15.15.3",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-web": "^0.21.0",
-    "ua-parser-js": "^2.0.9",
-    "yarn": "^1.22.22",
     "zustand": "^5.0.12"
   },
   "private": true,
