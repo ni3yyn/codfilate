@@ -40,6 +40,58 @@
         }
       ],
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "customerConfig": {
+        "customerId": "default",
+        "appName": "Codfilate",
+        "appNameAr": "كودفيلات",
+        "slug": "codfilate",
+        "tagline": "أطلق. سوّق. اربح.",
+        "domain": "codfilate.app",
+        "bundleId": "com.codfilate.app",
+        "packageName": "com.codfilate.app",
+        "supabase": {
+          "url": "https://akqcfnqkdsrkzhnongbi.supabase.co",
+          "anonKey": "sb_publishable_P0jafVUAjRmuz9qjjY_OgA_bDkCB9MT"
+        },
+        "theme": {
+          "primaryColor": "#6C5CE7",
+          "primaryLightColor": "#A29BFE",
+          "primaryDarkColor": "#5A4BD1",
+          "secondaryColor": "#A29BFE",
+          "accentColor": "#00CEC9",
+          "accentLightColor": "#55EFC4",
+          "accentDarkColor": "#00B894",
+          "splashBackground": "#0A0A1A",
+          "logoInitial": "C"
+        },
+        "currency": {
+          "code": "DZD",
+          "locale": "ar-DZ",
+          "symbol": "د.ج",
+          "minimumFractionDigits": 0,
+          "maximumFractionDigits": 0
+        },
+        "locale": {
+          "language": "ar",
+          "direction": "rtl",
+          "wilayas": true
+        },
+        "features": {
+          "enablePayouts": true,
+          "enableReferralLinks": true,
+          "enableMultipleImages": true,
+          "enableCategories": true,
+          "maxProductImages": 8,
+          "enableAdminPanel": true
+        }
+      },
+      "customerId": "default",
+      "router": {},
+      "eas": {
+        "projectId": "fe82c9b6-e142-4c3d-bb52-26dbb6875497"
+      }
+    }
   }
 }
