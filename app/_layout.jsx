@@ -16,10 +16,9 @@ import { useAuthStore } from '../src/stores/useAuthStore';
 import { usePushRegistration } from '../src/hooks/usePushNotifications';
 import { useThemeStore } from '../src/stores/useThemeStore';
 import { useAlertStore } from '../src/stores/useAlertStore';
-import GlobalAlert from '../src/components/ui/GlobalAlert';
-import { getHomeForRole } from '../src/lib/roleRouter';
 import { colors, typography, spacing, borderRadius } from '../src/theme/theme';
 import { appConfig } from '../src/lib/appConfig';
+import { securityShield } from '../src/lib/security.js';
 
 // Keep splash screen visible while loading resources
 SplashScreen.preventAutoHideAsync();
@@ -161,6 +160,32 @@ const diagnosticStyles = StyleSheet.create({
   footer: { fontFamily: 'Tajawal_400Regular', fontSize: 12, color: '#636E72', textAlign: 'center', marginTop: 8 }
 });
 
+function SecurityBreachScreen({ threats }) {
+  return (
+    <View style={[diagnosticStyles.container, { backgroundColor: '#1A0A0A' }]}>
+      <View style={[diagnosticStyles.card, { borderColor: '#FF7675' }]}>
+        <Ionicons name="shield-half-outline" size={64} color="#FF7675" />
+        <Text style={diagnosticStyles.title}>تنبيه أمني: بيئة غير آمنة</Text>
+        <Text style={diagnosticStyles.subtitle}>يمنع هذا التطبيق التشغيل في البيئات التي قد تعرض بيانات المستخدمين أو كود المصدر للخطر.</Text>
+        
+        <View style={diagnosticStyles.logs}>
+          {threats.map(t => (
+            <Text key={t} style={[diagnosticStyles.logLine, { color: '#FF7675' }]}>
+              • {t === 'COMPROMISED_OS' ? 'تم اكتشاف نظام روت/جيلبريك' : 
+                 t === 'DEBUGGER_ATTACHED' ? 'تم كشف محاولة تصحيح برمجية (Debugger)' : 
+                 t === 'EMULATOR_DETECTED' ? 'يمنع تشغيل التطبيق في المحاكيات' : t}
+            </Text>
+          ))}
+        </View>
+
+        <Text style={diagnosticStyles.footer}>
+          لأسباب أمنية، يرجى تشغيل التطبيق على هاتف حقيقي ونظام تشغيل أصلي.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
 export default function RootLayout() {
   useRTL();
   const initialize = useAuthStore((s) => s.initialize);
@@ -184,8 +209,15 @@ export default function RootLayout() {
     Tajawal_800ExtraBold,
   });
 
+  const [securityStatus, setSecurityStatus] = React.useState({ isSecure: true, threats: [] });
+
   useEffect(() => {
     initialize();
+    
+    // Perform security audit on startup
+    securityShield.checkEnvironment().then(res => {
+      setSecurityStatus(res);
+    });
   }, []);
 
   // Reset navigation guard when auth state changes significantly
@@ -246,6 +278,11 @@ export default function RootLayout() {
   // DIAGNOSTIC CHECK: If app is misconfigured in production, show the error interface
   if (!appConfig.isConfigured && !__DEV__) {
     return <DiagnosticScreen />;
+  }
+
+  // SECURITY CHECK: If app is running in a compromised environment, halt execution
+  if (!securityStatus.isSecure && !__DEV__) {
+    return <SecurityBreachScreen threats={securityStatus.threats} />;
   }
 
   return (
