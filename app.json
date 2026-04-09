@@ -42,6 +42,9 @@
       "expo-font"
     ],
     "extra": {
+      "eas": {
+        "projectId": "fe82c9b6-e142-4c3d-bb52-26dbb6875497"
+      },
       "customerConfig": {
         "customerId": "default",
         "appName": "Codfilate",
@@ -88,10 +91,7 @@
         }
       },
       "customerId": "default",
-      "router": {},
-      "eas": {
-        "projectId": "fe82c9b6-e142-4c3d-bb52-26dbb6875497"
-      }
+      "router": {}
     }
   }
 }
