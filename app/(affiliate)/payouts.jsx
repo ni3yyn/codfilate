@@ -60,7 +60,7 @@ const PAYOUT_BADGE = {
 export default function AffiliatePayouts() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  
+
   // Responsive Layout Logic (Enhanced for Web Dashboard)
   const isDesktop = width > 1024;
   const isTablet = width > 768 && width <= 1024;
@@ -72,7 +72,7 @@ export default function AffiliatePayouts() {
   const minPayout = usePlatformSettingsStore((s) => s.getFees().min_payout_amount);
   const { wallet, ledger, fetchWallet, fetchLedger } = useWalletStore();
   const { showAlert } = useAlertStore();
-  
+
   const {
     affiliateProfile,
     payoutRequests,
@@ -136,7 +136,7 @@ export default function AffiliatePayouts() {
   };
 
   const openModal = () => {
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => { });
     setShowForm(true);
   };
 
@@ -157,7 +157,7 @@ export default function AffiliatePayouts() {
   const handleRequest = async () => {
     const min = Number(minPayout) || 100;
     if (!amount || isNaN(amount) || Number(amount) < min) {
-      showAlert({ title: 'خطأ', message: `يرجى إدخال مبلغ صالح (أقل مبلغ ${min} د.ج)`, type: 'error' });
+      showAlert({ title: 'خطأ', message: `يرجى إدخال مبلغ صالح (أقل مبلغ ${min} دج)`, type: 'error' });
       return;
     }
 
@@ -193,12 +193,12 @@ export default function AffiliatePayouts() {
     });
 
     if (result.success) {
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       showAlert({ title: 'نجاح', message: 'تم إرسال طلب السحب بنجاح', type: 'success' });
       setAmount('');
       closeModal();
     } else {
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => { });
       showAlert({ title: 'خطأ', message: result.error, type: 'error' });
     }
     setIsSubmitting(false);
@@ -263,7 +263,7 @@ export default function AffiliatePayouts() {
           pulse={item.status === 'pending'}
         />
       </View>
-      
+
       <View style={[styles.payoutBody, { borderTopColor: theme.colors.border }]}>
         <View style={styles.payoutAmountRow}>
           <Text style={[typography.body, { color: theme.colors.textSecondary }]}>المبلغ المطلوب:</Text>
@@ -307,7 +307,7 @@ export default function AffiliatePayouts() {
         keyboardType="numeric"
         icon="cash-outline"
       />
-      
+
       <Text style={[styles.formLabel, { color: theme.colors.textSecondary }]}>طريقة السحب</Text>
       <View style={styles.methodGrid}>
         {PAYOUT_METHODS.map((m) => {
@@ -316,13 +316,13 @@ export default function AffiliatePayouts() {
             <TouchableOpacity
               key={m.id}
               onPress={() => {
-                if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+                if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => { });
                 setMethod(m.id);
               }}
               activeOpacity={0.7}
               style={[
                 styles.methodBtn,
-                { 
+                {
                   borderColor: isSelected ? theme.primary : theme.colors.border,
                   backgroundColor: isSelected ? theme.primary + '0A' : theme.colors.surface,
                 },
@@ -345,15 +345,15 @@ export default function AffiliatePayouts() {
       <Input
         label={
           method === 'ccp' ? 'رقم الحساب البريدي (CCP)' :
-          method === 'baridimob' ? 'رقم بريدي موب (RIP/BaridiMob)' :
-          'رقم الهاتف للفليكسي'
+            method === 'baridimob' ? 'رقم بريدي موب (RIP/BaridiMob)' :
+              'رقم الهاتف للفليكسي'
         }
         value={details}
         onChangeText={setDetails}
         placeholder="أدخل معلوماتك هنا..."
         icon={PAYOUT_METHODS.find(m => m.id === method)?.icon}
       />
-      
+
       {!details && (
         <View style={[styles.helperBox, { backgroundColor: theme.colors.surface2 }]}>
           <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
@@ -380,7 +380,7 @@ export default function AffiliatePayouts() {
       <Modal transparent visible={showForm} animationType="none">
         <Animated.View style={[styles.webModalOverlay, { opacity: fadeAnim }]}>
           <View style={[styles.webModalContainer, { backgroundColor: theme.colors.surface }]}>
-            
+
             {/* Proper Web Header with aligned Close Button */}
             <View style={styles.webModalHeaderRow}>
               <TouchableOpacity onPress={closeModal} style={[styles.webModalCloseBtn, { backgroundColor: theme.colors.surface2 }]}>
@@ -416,13 +416,13 @@ export default function AffiliatePayouts() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader 
-        title="المالية والسحوبات" 
+      <UniversalHeader
+        title="المالية والسحوبات"
         subtitle="إدارة وتبسيط عمليات سحب مستحقاتك"
       />
 
       <View style={styles.centerWrapper}>
-        <ScrollView 
+        <ScrollView
           style={styles.container}
           contentContainerStyle={[styles.contentContainer, { maxWidth: contentMaxWidth }]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
@@ -430,16 +430,16 @@ export default function AffiliatePayouts() {
         >
           {/* HERO DASHBOARD SECTION */}
           <View style={[styles.heroSection, isDesktop && styles.desktopHeroRow]}>
-            <LinearGradient 
-              colors={gradients.primary} 
-              style={[styles.balanceCard, isDesktop && styles.desktopBalanceCard]} 
-              start={{ x: 0, y: 0 }} 
+            <LinearGradient
+              colors={gradients.primary}
+              style={[styles.balanceCard, isDesktop && styles.desktopBalanceCard]}
+              start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               {/* Decorative Background Elements */}
               <View style={styles.cardCircle1} />
               <View style={styles.cardCircle2} />
-              
+
               <View style={styles.balanceHeader}>
                 <Text style={styles.balanceLabel}>الرصيد المتاح للسحب</Text>
                 <Ionicons name="wallet-outline" size={24} color="rgba(255,255,255,0.8)" />
@@ -448,46 +448,46 @@ export default function AffiliatePayouts() {
                 {formatCurrency(availableBalance)}
               </Text>
               <View style={styles.balanceFooter}>
-                <Text style={styles.balanceSubtext}>الحد الأدنى: {Number(minPayout) || 100} د.ج</Text>
+                <Text style={styles.balanceSubtext}>الحد الأدنى: {Number(minPayout) || 100} دج</Text>
               </View>
             </LinearGradient>
 
             <View style={[styles.statsRow, isDesktop && styles.desktopStatsStack]}>
-               {/* Pending Stat Card */}
-               <Card style={[styles.statCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  <View style={styles.statHeader}>
-                    <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>في الانتظار</Text>
-                    <View style={[styles.statIconWrap, { backgroundColor: '#FDCB6E15' }]}>
-                      <Ionicons name="time-outline" size={18} color="#FDCB6E" />
-                    </View>
+              {/* Pending Stat Card */}
+              <Card style={[styles.statCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <View style={styles.statHeader}>
+                  <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>في الانتظار</Text>
+                  <View style={[styles.statIconWrap, { backgroundColor: '#FDCB6E15' }]}>
+                    <Ionicons name="time-outline" size={18} color="#FDCB6E" />
                   </View>
-                  <Text style={[styles.statValue, { color: '#FDCB6E', writingDirection: 'rtl' }]}>
-                    {formatCurrency(pendingAmount)}
-                  </Text>
-               </Card>
-               
-               {/* Paid Stat Card */}
-               <Card style={[styles.statCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                  <View style={styles.statHeader}>
-                    <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>إجمالي المسحوب</Text>
-                    <View style={[styles.statIconWrap, { backgroundColor: '#00B89415' }]}>
-                      <Ionicons name="checkmark-done-outline" size={18} color="#00B894" />
-                    </View>
+                </View>
+                <Text style={[styles.statValue, { color: '#FDCB6E', writingDirection: 'rtl' }]}>
+                  {formatCurrency(pendingAmount)}
+                </Text>
+              </Card>
+
+              {/* Paid Stat Card */}
+              <Card style={[styles.statCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+                <View style={styles.statHeader}>
+                  <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>إجمالي المسحوب</Text>
+                  <View style={[styles.statIconWrap, { backgroundColor: '#00B89415' }]}>
+                    <Ionicons name="checkmark-done-outline" size={18} color="#00B894" />
                   </View>
-                  <Text style={[styles.statValue, { color: '#00B894', writingDirection: 'rtl' }]}>
-                    {formatCurrency(paidAmount)}
-                  </Text>
-               </Card>
+                </View>
+                <Text style={[styles.statValue, { color: '#00B894', writingDirection: 'rtl' }]}>
+                  {formatCurrency(paidAmount)}
+                </Text>
+              </Card>
             </View>
           </View>
 
           {/* MAIN CONTENT DASHBOARD GRID (For Web Multi-Column) */}
           <View style={isDesktop ? styles.desktopContentRow : null}>
-            
+
             {/* Right Column: Payout History */}
             <View style={[styles.sectionWrapper, isDesktop && styles.desktopHistoryCol]}>
               <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>سجل السحوبات</Text>
-              
+
               {isLoading && payoutRequests.length === 0 ? (
                 <LoadingSpinner />
               ) : payoutRequests.length === 0 ? (
@@ -517,10 +517,10 @@ export default function AffiliatePayouts() {
         </ScrollView>
       </View>
 
-      <FAB 
-        label="سحب أرباح" 
+      <FAB
+        label="سحب أرباح"
         icon="cash-outline"
-        onPress={openModal} 
+        onPress={openModal}
         visible={!showForm && availableBalance >= (Number(minPayout) || 100)}
       />
 
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
   centerWrapper: { flex: 1, alignItems: 'center' },
   container: { flex: 1, width: '100%' },
   contentContainer: { padding: spacing.md, alignSelf: 'center', width: '100%' },
-  
+
   // Mobile Hero Default
   heroSection: { marginBottom: spacing.xl },
   balanceCard: {
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     marginBottom: spacing.sm,
   },
-  
+
   // Desktop Hero Adjustments
   desktopHeroRow: { flexDirection: 'row-reverse', gap: spacing.lg, alignItems: 'stretch' },
   desktopBalanceCard: { flex: 1.5, marginBottom: 0 },
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
   // Background Elements
   cardCircle1: { position: 'absolute', top: -50, right: -20, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.1)' },
   cardCircle2: { position: 'absolute', bottom: -80, left: -40, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.05)' },
-  
+
   balanceHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.xs },
   balanceLabel: { ...typography.body, color: 'rgba(255,255,255,0.8)', fontFamily: 'Tajawal_500Medium' },
   balanceValue: { fontFamily: 'Tajawal_800ExtraBold', color: '#FFFFFF', fontSize: 38, textAlign: 'right', marginVertical: spacing.xs },
@@ -569,21 +569,21 @@ const styles = StyleSheet.create({
 
   // Stats Card Layout (Strict Right-To-Left Alignments)
   statsRow: { flexDirection: 'row-reverse', gap: spacing.sm },
-  statCard: { 
-    flex: 1, 
-    borderWidth: 1, 
-    padding: spacing.md, 
+  statCard: {
+    flex: 1,
+    borderWidth: 1,
+    padding: spacing.md,
     borderRadius: borderRadius.lg,
     alignItems: 'flex-end', // Crucial: Anchors children to right edge
     justifyContent: 'center',
   },
-  statHeader: { 
+  statHeader: {
     flexDirection: 'row-reverse', // Icon on Right, Text on Left
-    justifyContent: 'flex-start', 
-    alignItems: 'center', 
+    justifyContent: 'flex-start',
+    alignItems: 'center',
     gap: spacing.sm,
-    width: '100%', 
-    marginBottom: spacing.xs 
+    width: '100%',
+    marginBottom: spacing.xs
   },
   statIconWrap: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   statLabel: { ...typography.caption, textAlign: 'right', fontFamily: 'Tajawal_500Medium' },
@@ -615,10 +615,10 @@ const styles = StyleSheet.create({
   payoutIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   payoutMethodName: { ...typography.bodyBold, textAlign: 'right' },
   payoutDate: { ...typography.caption, textAlign: 'right', marginTop: 2 },
-  
+
   payoutBody: { padding: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1 },
   payoutAmountRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  
+
   payoutNotesWrapper: { marginTop: spacing.md, padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1 },
   notesText: { ...typography.small, textAlign: 'right', lineHeight: 22 },
   proofBtn: { marginTop: 8, flexDirection: 'row-reverse', alignItems: 'center', alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, gap: 6 },
@@ -627,12 +627,12 @@ const styles = StyleSheet.create({
   // --- FORM STYLES ---
   formContainer: { paddingVertical: spacing.sm, width: '100%' },
   formLabel: { ...typography.small, marginBottom: spacing.sm, marginTop: spacing.md, textAlign: 'right', fontFamily: 'Tajawal_700Bold' },
-  
+
   methodGrid: { flexDirection: 'row-reverse', gap: spacing.sm, marginBottom: spacing.lg },
   methodBtn: { flex: 1, padding: spacing.md, borderRadius: borderRadius.lg, borderWidth: 1.5, alignItems: 'flex-end' },
   methodIconRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', width: '100%', marginBottom: spacing.sm },
   methodText: { ...typography.small, fontFamily: 'Tajawal_700Bold', textAlign: 'right' },
-  
+
   helperBox: { flexDirection: 'row-reverse', alignItems: 'center', padding: spacing.sm, borderRadius: borderRadius.md, gap: spacing.sm, marginTop: -spacing.xs, marginBottom: spacing.md },
   helperText: { flex: 1, ...typography.caption, textAlign: 'right', lineHeight: 20 },
 
@@ -656,20 +656,20 @@ const styles = StyleSheet.create({
     shadowRadius: 25,
     elevation: 10,
   },
-  webModalHeaderRow: { 
-    flexDirection: 'row-reverse', 
-    justifyContent: 'space-between', 
+  webModalHeaderRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: spacing.lg,
   },
   webModalHeaderTexts: { flex: 1, alignItems: 'flex-end', marginEnd: spacing.md },
   webModalTitle: { ...typography.h2, textAlign: 'right', marginBottom: spacing.xs },
   webModalSubtitle: { ...typography.body, textAlign: 'right' },
-  webModalCloseBtn: { 
-    width: 36, 
-    height: 36, 
-    borderRadius: 18, 
-    alignItems: 'center', 
+  webModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
     justifyContent: 'center',
   },
 

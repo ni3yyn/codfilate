@@ -46,7 +46,7 @@ export default function MerchantPayouts() {
   const minPayout = usePlatformSettingsStore((s) => s.getFees().min_payout_amount);
   const { wallet, ledger, fetchWallet, fetchLedger } = useWalletStore();
   const { showAlert } = useAlertStore();
-  
+
   // Note: We use useAffiliateStore for the generic payout request CRUD functions
   const {
     payoutRequests,
@@ -102,7 +102,7 @@ export default function MerchantPayouts() {
   const handleRequest = async () => {
     const min = Number(minPayout) || 1000; // Merchants typically have higher minimums, fallback to 1000
     if (!amount || isNaN(amount) || Number(amount) < min) {
-      showAlert({ title: 'خطأ', message: `يرجى إدخال مبلغ صالح (أقل مبلغ ${min} د.ج)`, type: 'error' });
+      showAlert({ title: 'خطأ', message: `يرجى إدخال مبلغ صالح (أقل مبلغ ${min} دج)`, type: 'error' });
       return;
     }
 
@@ -172,8 +172,8 @@ export default function MerchantPayouts() {
       style={styles.payoutCard}
       accentColor={
         item.status === 'paid' ? '#00B894' :
-        item.status === 'pending' ? '#FDCB6E' :
-        item.status === 'rejected' ? '#FF6B6B' : '#9CA3AF'
+          item.status === 'pending' ? '#FDCB6E' :
+            item.status === 'rejected' ? '#FF6B6B' : '#9CA3AF'
       }
       accentPosition="left"
     >
@@ -228,7 +228,7 @@ export default function MerchantPayouts() {
         keyboardType="numeric"
         icon="cash-outline"
       />
-      
+
       <Text style={[styles.label, { color: theme.colors.textSecondary }]}>طريقة السحب</Text>
       <View style={styles.methodGrid}>
         {PAYOUT_METHODS.map((m) => (
@@ -238,7 +238,7 @@ export default function MerchantPayouts() {
             activeOpacity={0.7}
             style={[
               styles.methodBtn,
-              { 
+              {
                 borderColor: method === m.id ? theme.primary : theme.colors.border,
                 backgroundColor: method === m.id ? theme.primary + '10' : 'transparent',
               },
@@ -263,15 +263,15 @@ export default function MerchantPayouts() {
       <Input
         label={
           method === 'ccp' ? 'رقم الحساب البريدي (CCP)' :
-          method === 'baridimob' ? 'رقم بريدي موب (BaridiMob)' :
-          'رقم الهاتف للفليكسي'
+            method === 'baridimob' ? 'رقم بريدي موب (BaridiMob)' :
+              'رقم الهاتف للفليكسي'
         }
         value={details}
         onChangeText={setDetails}
         placeholder="أدخل معلوماتك هنا..."
         icon={PAYOUT_METHODS.find(m => m.id === method)?.icon}
       />
-      
+
       {!details && (
         <Text style={{ ...typography.caption, color: theme.colors.textTertiary, marginTop: -spacing.xs, marginBottom: spacing.md, marginHorizontal: 4 }}>
           💡 يمكنك حفظ بيانات الدفع في الإعدادات لتظهر هنا تلقائياً.
@@ -290,13 +290,13 @@ export default function MerchantPayouts() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader 
-        title="سحب أموال المبيعات" 
+      <UniversalHeader
+        title="سحب أموال المبيعات"
         subtitle="إدارة وتبسيط عمليات سحب مستحقاتك من المنصة"
         actionHint={!showForm ? "أطلب سحب رصيدك من الزر بالأسفل" : null}
       />
 
-      <ScrollView 
+      <ScrollView
         style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
@@ -304,112 +304,112 @@ export default function MerchantPayouts() {
         {!dataReady ? (
           <LoadingSpinner />
         ) : (
-        <>
-        {/* Helper Note for Merchant workflow */}
-        <View style={[styles.helperBox, { backgroundColor: theme.primary + '10' }]}>
-           <Ionicons name="information-circle-outline" size={20} color={theme.primary} />
-           <Text style={[styles.helperText, { color: theme.primary }]}>
-             تقوم بطلب أموال المبيعات الناجحة من المدير الإقليمي لولايتك مباشرة.
-           </Text>
-        </View>
-
-        {/* Balance Card Section */}
-        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
-          <Card gradient gradientColors={gradients.primary} style={[styles.balanceCard, { flex: 1 }]}>
-            <Text style={styles.balanceLabel}>الرصيد المتاح للسحب</Text>
-            <Text style={styles.balanceValue}>{formatCurrency(availableBalance)}</Text>
-            <View style={styles.balanceDivider} />
-            <Text style={styles.balanceSubtext}>
-              الحد الأدنى: {Number(minPayout) || 100} د.ج
-            </Text>
-          </Card>
-          
-          <View style={{ gap: spacing.sm, width: '38%' }}>
-             <Card style={{ flex: 1, padding: spacing.md, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ ...typography.caption, color: theme.colors.textSecondary }}>في الانتظار</Text>
-                <Text style={{ ...typography.bodyBold, color: '#FDCB6E', marginTop: 4 }}>
-                  {formatCurrency(payoutRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + Number(r.amount), 0))}
-                </Text>
-             </Card>
-             <Card style={{ flex: 1, padding: spacing.md, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ ...typography.caption, color: theme.colors.textSecondary }}>إجمالي المسحوب</Text>
-                <Text style={{ ...typography.bodyBold, color: '#00B894', marginTop: 4 }}>
-                  {formatCurrency(payoutRequests.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.amount), 0))}
-                </Text>
-             </Card>
-          </View>
-        </View>
-
-        {ledger.length > 0 && (
-          <Card style={{ marginBottom: spacing.md, padding: spacing.md }}>
-            <Text style={[typography.bodyBold, { color: theme.colors.text, marginBottom: spacing.sm }]}>
-              حركة حساب المورد
-            </Text>
-            {ledger.slice(0, 12).map((row) => (
-              <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                <Text style={{ ...typography.caption, color: theme.colors.textSecondary, flex: 1 }} numberOfLines={1}>
-                  {row.ledger_type} {row.ref_id ? `· ${row.ref_id.slice(0, 8)}` : ''}
-                </Text>
-                <Text style={{
-                  ...typography.caption,
-                  color: Number(row.amount) >= 0 ? '#00B894' : '#FF6B6B',
-                  fontFamily: 'Tajawal_700Bold',
-                }}>
-                  {Number(row.amount) >= 0 ? '+' : ''}{formatCurrency(row.amount)}
-                </Text>
-              </View>
-            ))}
-          </Card>
-        )}
-
-        {Platform.OS === 'web' ? (
-          <Modal
-            visible={showForm}
-            onClose={() => setShowForm(false)}
-            title="طلب سحب جديد"
-            subtitle="سيتم مراجعة طلبك وتحويل المبلغ خلال ساعات العمل"
-            maxWidth={600}
-          >
-            {renderPayoutForm()}
-          </Modal>
-        ) : (
-          <BottomSheet
-            visible={showForm}
-            onClose={() => setShowForm(false)}
-            title="طلب سحب جديد"
-            subtitle="سيتم مراجعة طلبك وتحويل المبلغ خلال ساعات العمل"
-          >
-            {renderPayoutForm()}
-          </BottomSheet>
-        )}
-
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>سجل السحوبات</Text>
-        
-        {isLoading && payoutRequests.length === 0 ? (
-          <LoadingSpinner />
-        ) : payoutRequests.length === 0 ? (
-          <EmptyState
-            icon="wallet-outline"
-            title="لا توجد طلبات سحب"
-            message="ستظهر طلبات السحب الخاصة بك هنا."
-          />
-        ) : (
-          payoutRequests.map((item) => (
-            <View key={item.id}>
-              {renderPayout({ item })}
+          <>
+            {/* Helper Note for Merchant workflow */}
+            <View style={[styles.helperBox, { backgroundColor: theme.primary + '10' }]}>
+              <Ionicons name="information-circle-outline" size={20} color={theme.primary} />
+              <Text style={[styles.helperText, { color: theme.primary }]}>
+                تقوم بطلب أموال المبيعات الناجحة من المدير الإقليمي لولايتك مباشرة.
+              </Text>
             </View>
-          ))
-        )}
 
-        <View style={styles.bottomSpacer} />
-        </>
+            {/* Balance Card Section */}
+            <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg }}>
+              <Card gradient gradientColors={gradients.primary} style={[styles.balanceCard, { flex: 1 }]}>
+                <Text style={styles.balanceLabel}>الرصيد المتاح للسحب</Text>
+                <Text style={styles.balanceValue}>{formatCurrency(availableBalance)}</Text>
+                <View style={styles.balanceDivider} />
+                <Text style={styles.balanceSubtext}>
+                  الحد الأدنى: {Number(minPayout) || 100} دج
+                </Text>
+              </Card>
+
+              <View style={{ gap: spacing.sm, width: '38%' }}>
+                <Card style={{ flex: 1, padding: spacing.md, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ ...typography.caption, color: theme.colors.textSecondary }}>في الانتظار</Text>
+                  <Text style={{ ...typography.bodyBold, color: '#FDCB6E', marginTop: 4 }}>
+                    {formatCurrency(payoutRequests.filter(r => r.status === 'pending').reduce((sum, r) => sum + Number(r.amount), 0))}
+                  </Text>
+                </Card>
+                <Card style={{ flex: 1, padding: spacing.md, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ ...typography.caption, color: theme.colors.textSecondary }}>إجمالي المسحوب</Text>
+                  <Text style={{ ...typography.bodyBold, color: '#00B894', marginTop: 4 }}>
+                    {formatCurrency(payoutRequests.filter(r => r.status === 'paid').reduce((sum, r) => sum + Number(r.amount), 0))}
+                  </Text>
+                </Card>
+              </View>
+            </View>
+
+            {ledger.length > 0 && (
+              <Card style={{ marginBottom: spacing.md, padding: spacing.md }}>
+                <Text style={[typography.bodyBold, { color: theme.colors.text, marginBottom: spacing.sm }]}>
+                  حركة حساب المورد
+                </Text>
+                {ledger.slice(0, 12).map((row) => (
+                  <View key={row.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ ...typography.caption, color: theme.colors.textSecondary, flex: 1 }} numberOfLines={1}>
+                      {row.ledger_type} {row.ref_id ? `· ${row.ref_id.slice(0, 8)}` : ''}
+                    </Text>
+                    <Text style={{
+                      ...typography.caption,
+                      color: Number(row.amount) >= 0 ? '#00B894' : '#FF6B6B',
+                      fontFamily: 'Tajawal_700Bold',
+                    }}>
+                      {Number(row.amount) >= 0 ? '+' : ''}{formatCurrency(row.amount)}
+                    </Text>
+                  </View>
+                ))}
+              </Card>
+            )}
+
+            {Platform.OS === 'web' ? (
+              <Modal
+                visible={showForm}
+                onClose={() => setShowForm(false)}
+                title="طلب سحب جديد"
+                subtitle="سيتم مراجعة طلبك وتحويل المبلغ خلال ساعات العمل"
+                maxWidth={600}
+              >
+                {renderPayoutForm()}
+              </Modal>
+            ) : (
+              <BottomSheet
+                visible={showForm}
+                onClose={() => setShowForm(false)}
+                title="طلب سحب جديد"
+                subtitle="سيتم مراجعة طلبك وتحويل المبلغ خلال ساعات العمل"
+              >
+                {renderPayoutForm()}
+              </BottomSheet>
+            )}
+
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>سجل السحوبات</Text>
+
+            {isLoading && payoutRequests.length === 0 ? (
+              <LoadingSpinner />
+            ) : payoutRequests.length === 0 ? (
+              <EmptyState
+                icon="wallet-outline"
+                title="لا توجد طلبات سحب"
+                message="ستظهر طلبات السحب الخاصة بك هنا."
+              />
+            ) : (
+              payoutRequests.map((item) => (
+                <View key={item.id}>
+                  {renderPayout({ item })}
+                </View>
+              ))
+            )}
+
+            <View style={styles.bottomSpacer} />
+          </>
         )}
       </ScrollView>
 
-      <FAB 
-        label="سحب أموال" 
+      <FAB
+        label="سحب أموال"
         icon="cash-outline"
-        onPress={() => setShowForm(true)} 
+        onPress={() => setShowForm(true)}
         visible={!showForm}
       />
     </SafeAreaView>

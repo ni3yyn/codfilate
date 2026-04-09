@@ -56,10 +56,10 @@ export default function AdminStores() {
         data?.forEach(item => {
           if (!stats[item.store_id]) stats[item.store_id] = { orders: 0, revenue: 0, products: 0, affiliates: 0 };
           if (key === 'revenue') {
-             stats[item.store_id].revenue += Number(item.total || 0);
-             stats[item.store_id].orders++;
+            stats[item.store_id].revenue += Number(item.total || 0);
+            stats[item.store_id].orders++;
           } else {
-             stats[item.store_id][key]++;
+            stats[item.store_id][key]++;
           }
         });
       };
@@ -126,7 +126,7 @@ export default function AdminStores() {
       </Card>
       <Card style={[styles.summaryCard, { flex: 1.5 }]}>
         <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>إجمالي المبيعات</Text>
-        <Text style={[styles.summaryValue, { color: theme.primary }]}>{formatCompactNumber(platformStats.revenue)} د.ج</Text>
+        <Text style={[styles.summaryValue, { color: theme.primary }]}>{formatCompactNumber(platformStats.revenue)} دج</Text>
       </Card>
     </View>
   );
@@ -155,18 +155,18 @@ export default function AdminStores() {
                 showRing
                 ringColor={item.primary_color || theme.primary}
               />
-              <TouchableOpacity 
-                style={[styles.infoCircle, { backgroundColor: theme.primary + '15' }]} 
-                onPress={() => showAlert({ 
-                  title: item.name, 
-                  message: item.description || 'لا يوجد وصف متاح لهذا المتجر.', 
-                  type: 'info' 
+              <TouchableOpacity
+                style={[styles.infoCircle, { backgroundColor: theme.primary + '15' }]}
+                onPress={() => showAlert({
+                  title: item.name,
+                  message: item.description || 'لا يوجد وصف متاح لهذا المتجر.',
+                  type: 'info'
                 })}
               >
                 <Ionicons name="information-circle" size={16} color={theme.primary} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.headerText}>
               <Text numberOfLines={1} style={[styles.storeName, { color: theme.colors.text }]}>{item.name}</Text>
               <Text numberOfLines={1} style={[styles.ownerName, { color: theme.colors.textSecondary }]}>
@@ -189,19 +189,19 @@ export default function AdminStores() {
             </View>
             <View style={styles.statBox}>
               <Text style={[styles.statNum, { color: theme.primary }]}>{formatCompactNumber(stats.revenue)}</Text>
-              <Text style={[styles.statName, { color: theme.colors.textTertiary }]}>د.ج</Text>
+              <Text style={[styles.statName, { color: theme.colors.textTertiary }]}>دج</Text>
             </View>
           </View>
 
           <View style={styles.actionsRow}>
-            <Button 
-               title={item.is_active ? 'تعطيل' : 'تفعيل'} 
-               onPress={() => handleToggleStatus(item)}
-               variant={item.is_active ? 'ghost' : 'success'}
-               size="small"
-               style={{ flex: 1, height: 34 }}
+            <Button
+              title={item.is_active ? 'تعطيل' : 'تفعيل'}
+              onPress={() => handleToggleStatus(item)}
+              variant={item.is_active ? 'ghost' : 'success'}
+              size="small"
+              style={{ flex: 1, height: 34 }}
             />
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => setExpandedStore(isExpanded ? null : item.id)}
               style={[styles.expandToggle, { backgroundColor: theme.colors.surface2 }]}
             >
@@ -230,8 +230,8 @@ export default function AdminStores() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader 
-        title="إدارة المتاجر" 
+      <UniversalHeader
+        title="إدارة المتاجر"
         rightAction={<Badge label={`${filteredStores.length} متجر`} variant="primary" />}
       />
 
@@ -257,8 +257,8 @@ export default function AdminStores() {
               </View>
               <View style={styles.filterRow}>
                 {FILTERS.map(f => (
-                  <TouchableOpacity 
-                    key={f.key} 
+                  <TouchableOpacity
+                    key={f.key}
                     onPress={() => setFilter(f.key)}
                     style={[styles.filterBtn, { backgroundColor: filter === f.key ? theme.primary : theme.colors.surface }]}
                   >
@@ -309,10 +309,10 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, marginStart: 8, ...typography.body, textAlign: 'right' },
   filterRow: { flexDirection: 'row', gap: spacing.xs },
-  filterBtn: { 
-    paddingHorizontal: spacing.md, 
-    paddingVertical: 6, 
-    borderRadius: borderRadius.full 
+  filterBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full
   },
   filterText: { ...typography.small, fontFamily: 'Tajawal_700Bold' },
   list: {

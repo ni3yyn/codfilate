@@ -39,7 +39,7 @@ export const appConfig = {
   currency: {
     code: customerConfig.currency?.code || 'DZD',
     locale: customerConfig.currency?.locale || 'ar-DZ',
-    symbol: customerConfig.currency?.symbol || 'د.ج',
+    symbol: customerConfig.currency?.symbol || 'دج',
     minimumFractionDigits: customerConfig.currency?.minimumFractionDigits ?? 0,
     maximumFractionDigits: customerConfig.currency?.maximumFractionDigits ?? 0,
   },

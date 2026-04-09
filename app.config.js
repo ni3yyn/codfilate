@@ -68,6 +68,7 @@ module.exports = ({ config: defaultConfig }) => ({
     ],
   ],
   extra: {
+    ...defaultConfig.extra,
     customerConfig: customerConfig,
     customerId: customerId,
   },

@@ -27,16 +27,16 @@ export default function DeliveryPayouts() {
   const profile = useAuthStore((s) => s.profile);
   const fetchPlatformSettings = usePlatformSettingsStore((s) => s.fetchSettings);
   const minPayout = usePlatformSettingsStore((s) => s.getFees().min_payout_amount);
-  
+
   const { wallet, ledger, fetchWallet, fetchLedger } = useWalletStore();
   const { payoutRequests, fetchPayoutRequests, createPayoutRequest, isLoading } = useAffiliateStore();
-  
+
   const [amount, setAmount] = useState('');
   const [details, setDetails] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // Custom Alert state
   const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'info' });
 
@@ -65,12 +65,12 @@ export default function DeliveryPayouts() {
   const handleSubmit = async () => {
     const min = Number(minPayout) || 100;
     const n = Number(amount);
-    
+
     if (!n || n < min) {
       showAlert('خطأ في المبلغ', `الحد الأدنى للسحب هو ${formatCurrency(min)}`, 'error');
       return;
     }
-    
+
     if (!details.trim()) {
       showAlert('معلومات ناقصة', 'يرجى إدخال معلومات الدفع (رقم الحساب/CCP)', 'error');
       return;
@@ -79,7 +79,7 @@ export default function DeliveryPayouts() {
     const pendingSum = payoutRequests
       .filter((r) => r.status === 'pending')
       .reduce((s, r) => s + Number(r.amount), 0);
-      
+
     if (n > Number(wallet?.balance ?? 0) - pendingSum) {
       showAlert('رصيد غير كافٍ', 'المبلغ المطلوب أكبر من الرصيد المتاح حالياً', 'error');
       return;
@@ -108,26 +108,26 @@ export default function DeliveryPayouts() {
     }
   };
 
-  const pendingAmount = useMemo(() => 
+  const pendingAmount = useMemo(() =>
     payoutRequests.filter((r) => r.status === 'pending').reduce((s, r) => s + Number(r.amount), 0)
-  , [payoutRequests]);
+    , [payoutRequests]);
 
   const availableBalance = Number(wallet?.balance ?? 0) - pendingAmount;
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader 
-        title="سحب الأجور" 
-        subtitle="محفظة السائق" 
+      <UniversalHeader
+        title="سحب الأجور"
+        subtitle="محفظة السائق"
         actionHint={!showForm ? "أطلب سحب مستحقاتك من الزر بالأسفل" : null}
       />
-      
-      <ScrollView 
+
+      <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh} 
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
             tintColor={theme.primary}
             colors={[theme.primary]}
           />
@@ -137,20 +137,20 @@ export default function DeliveryPayouts() {
         {/* Wallet Overview */}
         <Card style={styles.walletCard} accentColor={theme.primary} accentPosition="left">
           <View style={styles.walletInner}>
-             <View>
-                <Text style={[styles.balanceLabel, { color: theme.colors.textTertiary }]}>الرصيد المتاح للسحب</Text>
-                <Text style={[styles.balanceValue, { color: theme.primary }]}>{formatCurrency(availableBalance)}</Text>
-             </View>
-             <View style={styles.balanceInfo}>
-                <View style={styles.infoRow}>
-                   <View style={[styles.dot, { backgroundColor: theme.colors.textTertiary }]} />
-                   <Text style={[styles.infoText, { color: theme.colors.textTertiary }]}>إجمالي الرصيد: {formatCurrency(wallet?.balance ?? 0)}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                   <View style={[styles.dot, { backgroundColor: '#FDCB6E' }]} />
-                   <Text style={[styles.infoText, { color: '#FDCB6E' }]}>قيد الانتظار: {formatCurrency(pendingAmount)}</Text>
-                </View>
-             </View>
+            <View>
+              <Text style={[styles.balanceLabel, { color: theme.colors.textTertiary }]}>الرصيد المتاح للسحب</Text>
+              <Text style={[styles.balanceValue, { color: theme.primary }]}>{formatCurrency(availableBalance)}</Text>
+            </View>
+            <View style={styles.balanceInfo}>
+              <View style={styles.infoRow}>
+                <View style={[styles.dot, { backgroundColor: theme.colors.textTertiary }]} />
+                <Text style={[styles.infoText, { color: theme.colors.textTertiary }]}>إجمالي الرصيد: {formatCurrency(wallet?.balance ?? 0)}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <View style={[styles.dot, { backgroundColor: '#FDCB6E' }]} />
+                <Text style={[styles.infoText, { color: '#FDCB6E' }]}>قيد الانتظار: {formatCurrency(pendingAmount)}</Text>
+              </View>
+            </View>
           </View>
         </Card>
 
@@ -163,75 +163,75 @@ export default function DeliveryPayouts() {
           subtitle="سيتم مراجعة طلبك وتحويل المبلغ للمحفظة المختارة"
         >
           <View style={styles.formContainer}>
-             <Input 
-               label="المبلغ المطلوب (د.ج)" 
-               value={amount} 
-               onChangeText={setAmount} 
-               keyboardType="numeric" 
-               placeholder={`الحد الأدنى ${minPayout || 100} د.ج`}
-               icon="cash-outline"
-             />
-             <Input 
-               label="معلومات الدفع (CCP / رقم الحساب)" 
-               value={details} 
-               onChangeText={setDetails} 
-               multiline 
-               numberOfLines={3}
-               placeholder="يرجى إدخال رقم الـ CCP والاسم الكامل..."
-               icon="information-circle-outline"
-             />
-             <Button 
-               title="إرسال طلب السحب" 
-               onPress={handleSubmit} 
-               loading={submitting} 
-               style={styles.submitBtn}
-             />
-             <Text style={styles.formHint}>* تخضع جميع الطلبات للمراجعة قبل التحويل.</Text>
+            <Input
+              label="المبلغ المطلوب (دج)"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+              placeholder={`الحد الأدنى ${minPayout || 100} دج`}
+              icon="cash-outline"
+            />
+            <Input
+              label="معلومات الدفع (CCP / رقم الحساب)"
+              value={details}
+              onChangeText={setDetails}
+              multiline
+              numberOfLines={3}
+              placeholder="يرجى إدخال رقم الـ CCP والاسم الكامل..."
+              icon="information-circle-outline"
+            />
+            <Button
+              title="إرسال طلب السحب"
+              onPress={handleSubmit}
+              loading={submitting}
+              style={styles.submitBtn}
+            />
+            <Text style={styles.formHint}>* تخضع جميع الطلبات للمراجعة قبل التحويل.</Text>
           </View>
         </BottomSheet>
 
         {/* Recent Payouts */}
         <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>سجل السحوبات</Text>
         {payoutRequests.length === 0 ? (
-           <Card style={styles.emptyCard}>
-              <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>لا توجد طلبات سحب سابقة.</Text>
-           </Card>
+          <Card style={styles.emptyCard}>
+            <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>لا توجد طلبات سحب سابقة.</Text>
+          </Card>
         ) : (
           payoutRequests.slice(0, 5).map((p) => {
             const statusColor = p.status === 'paid' ? theme.primary : p.status === 'pending' ? '#FDCB6E' : theme.error;
             return (
               <Card key={p.id} style={styles.payoutItem} borderVariant="default">
                 <View style={styles.payoutRow}>
-                   <View>
-                      <Text style={[styles.payoutAmount, { color: theme.colors.text }]}>{formatCurrency(p.amount)}</Text>
-                      <Text style={[styles.payoutDate, { color: theme.colors.textTertiary }]}>{formatDate(p.created_at)}</Text>
-                   </View>
-                   <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
-                      <Text style={[styles.statusText, { color: statusColor }]}>
-                         {p.status === 'paid' ? 'تم الدفع' : p.status === 'pending' ? 'قيد الانتظار' : 'مرفوض'}
-                      </Text>
-                   </View>
+                  <View>
+                    <Text style={[styles.payoutAmount, { color: theme.colors.text }]}>{formatCurrency(p.amount)}</Text>
+                    <Text style={[styles.payoutDate, { color: theme.colors.textTertiary }]}>{formatDate(p.created_at)}</Text>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: statusColor + '15' }]}>
+                    <Text style={[styles.statusText, { color: statusColor }]}>
+                      {p.status === 'paid' ? 'تم الدفع' : p.status === 'pending' ? 'قيد الانتظار' : 'مرفوض'}
+                    </Text>
+                  </View>
                 </View>
-                 {(p.admin_notes || p.external_ref || p.payout_proof_url) && (
-                   <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.divider }}>
-                     {p.admin_notes && (
-                       <Text style={{ ...typography.small, color: theme.colors.textSecondary, fontStyle: 'italic' }}>
-                         💬 ملاحظة: {p.admin_notes}
-                       </Text>
-                     )}
-                     {p.external_ref && (
-                       <Text style={{ ...typography.small, color: theme.primary, marginTop: 4, fontFamily: 'Tajawal_500Medium' }}>
-                         🧾 مرجع الدفع: {p.external_ref}
-                       </Text>
-                     )}
-                     {p.payout_proof_url && (
-                       <TouchableOpacity onPress={() => Linking.openURL(p.payout_proof_url)} style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '15', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
-                         <Ionicons name="document-attach-outline" size={16} color={theme.primary} />
-                         <Text style={{ color: theme.primary, fontFamily: 'Tajawal_700Bold', marginStart: 6, fontSize: 12 }}>عرض إيصال الدفع</Text>
-                       </TouchableOpacity>
-                     )}
-                   </View>
-                 )}
+                {(p.admin_notes || p.external_ref || p.payout_proof_url) && (
+                  <View style={{ marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.divider }}>
+                    {p.admin_notes && (
+                      <Text style={{ ...typography.small, color: theme.colors.textSecondary, fontStyle: 'italic' }}>
+                        💬 ملاحظة: {p.admin_notes}
+                      </Text>
+                    )}
+                    {p.external_ref && (
+                      <Text style={{ ...typography.small, color: theme.primary, marginTop: 4, fontFamily: 'Tajawal_500Medium' }}>
+                        🧾 مرجع الدفع: {p.external_ref}
+                      </Text>
+                    )}
+                    {p.payout_proof_url && (
+                      <TouchableOpacity onPress={() => Linking.openURL(p.payout_proof_url)} style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.primary + '15', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                        <Ionicons name="document-attach-outline" size={16} color={theme.primary} />
+                        <Text style={{ color: theme.primary, fontFamily: 'Tajawal_700Bold', marginStart: 6, fontSize: 12 }}>عرض إيصال الدفع</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </Card>
             );
           })
@@ -241,13 +241,13 @@ export default function DeliveryPayouts() {
         <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>حركات المحفظة الأخيرة</Text>
         <Card style={styles.ledgerCard}>
           {ledger.length === 0 ? (
-             <Text style={{ textAlign: 'center', color: theme.colors.textTertiary }}>لا توجد حركات مؤخراً.</Text>
+            <Text style={{ textAlign: 'center', color: theme.colors.textTertiary }}>لا توجد حركات مؤخراً.</Text>
           ) : (
             ledger.slice(0, 10).map((row) => (
               <View key={row.id} style={[styles.ledgerRow, { borderBottomColor: theme.colors.border }]}>
                 <View>
-                   <Text style={[styles.ledgerType, { color: theme.colors.text }]}>{row.ledger_type === 'delivery_fee' ? 'أجرة توصيل' : row.ledger_type}</Text>
-                   <Text style={[styles.ledgerDate, { color: theme.colors.textTertiary }]}>{formatDate(row.created_at)}</Text>
+                  <Text style={[styles.ledgerType, { color: theme.colors.text }]}>{row.ledger_type === 'delivery_fee' ? 'أجرة توصيل' : row.ledger_type}</Text>
+                  <Text style={[styles.ledgerDate, { color: theme.colors.textTertiary }]}>{formatDate(row.created_at)}</Text>
                 </View>
                 <Text style={[styles.ledgerAmount, { color: Number(row.amount) >= 0 ? theme.primary : theme.error }]}>
                   {Number(row.amount) >= 0 ? '+' : ''}{formatCurrency(row.amount)}
@@ -260,14 +260,14 @@ export default function DeliveryPayouts() {
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
-      <FAB 
-        label="سحب أرباح" 
+      <FAB
+        label="سحب أرباح"
         icon="wallet-outline"
-        onPress={() => setShowForm(true)} 
+        onPress={() => setShowForm(true)}
         visible={!showForm}
       />
 
-      <CustomAlert 
+      <CustomAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
         message={alertConfig.message}
