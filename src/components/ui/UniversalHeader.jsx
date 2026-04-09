@@ -1,0 +1,256 @@
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Animated } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../hooks/useTheme';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useAuthStore } from '../../stores/useAuthStore';
+import { typography, spacing, borderRadius } from '../../theme/theme';
+
+/**
+ * Universal premium header with Glassmorphism support.
+ * @param {string} title - Main page title
+ * @param {string} subtitle - Optional secondary text
+ * @param {React.ReactNode} rightAction - Custom components for the left/right side (depending on RTL)
+ * @param {boolean} showSearch - Whether to show the search icon
+ * @param {Function} onSearchPress - Handler for search icon press
+ * @param {boolean} showAvatar - Whether to show user avatar/profile info
+ */
+export default function UniversalHeader({
+  title,
+  subtitle,
+  rightAction,
+  showSearch = false,
+  onSearchPress,
+  showAvatar = true,
+  actionHint, // Text string like "أضف منتج من الزر بالأسفل"
+  children
+}) {
+  const theme = useTheme();
+  const { isWide, maxContentWidth, contentPadding } = useResponsive();
+  const profile = useAuthStore(s => s.profile);
+
+  // Entrance animation for title
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(8)).current;
+
+  React.useEffect(() => {
+    fadeAnim.setValue(0);
+    slideAnim.setValue(8);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 50,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+    ]).start();
+  }, [title]);
+
+  // Identity Role formatting
+  const getRoleLabel = (role) => {
+    switch (role) {
+      case 'admin': return 'مدير النظام';
+      case 'merchant': return 'تاجر';
+      case 'affiliate': return 'مسوق';
+      case 'regional_manager': return 'مدير إقليمي';
+      case 'delivery': return 'توصيل';
+      default: return 'مستخدم';
+    }
+  };
+
+  return (
+    <LinearGradient 
+      colors={[theme.primary, theme.primaryDark]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={[
+        styles.container, 
+        { 
+          borderBottomLeftRadius: borderRadius.xl,
+          borderBottomRightRadius: borderRadius.xl,
+          shadowColor: theme.primaryDark,
+        }
+      ]}
+    >
+      <SafeAreaView edges={['top']} style={styles.safeArea}>
+        <View style={[
+          styles.inner,
+          isWide && { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%' },
+          { paddingHorizontal: isWide ? contentPadding : spacing.md }
+        ]}>
+          <View style={styles.contentRow}>
+            
+            {/* Identity Group (Avatar + Name) */}
+            {showAvatar ? (
+              <View style={styles.identityGroup}>
+                <View style={[styles.avatarCircle, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                   {profile?.avatar_url ? (
+                     <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+                   ) : (
+                     <Ionicons name="person" size={18} color="#FFFFFF" />
+                   )}
+                </View>
+                <View style={styles.identityText}>
+                  <Text style={[styles.userName, { color: '#FFFFFF' }]} numberOfLines={1}>
+                    {profile?.full_name || 'مستخدم جديد'}
+                  </Text>
+                  <Text style={[styles.userRole, { color: 'rgba(255,255,255,0.8)' }]}>
+                    {getRoleLabel(profile?.role)}
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <Animated.View style={[styles.titleOnly, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+                <Text style={[styles.mainTitle, { color: '#FFFFFF' }]}>{title}</Text>
+                {subtitle && <Text style={[styles.mainSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>{subtitle}</Text>}
+              </Animated.View>
+            )}
+
+            {/* Actions Group */}
+            <View style={styles.actionsGroup}>
+              {showSearch && (
+                <TouchableOpacity 
+                  onPress={onSearchPress}
+                  style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
+                >
+                  <Ionicons name="search" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+              {rightAction}
+            </View>
+
+          </View>
+
+          {/* Contextual Title or Action Hint */}
+          {((showAvatar && title) || actionHint) ? (
+            <Animated.View style={[styles.pageTitleRow, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+               {title && <Text style={[styles.h1, { color: '#FFFFFF' }]}>{title}</Text>}
+               {subtitle && <Text style={[styles.hSub, { color: 'rgba(255,255,255,0.7)' }]}>{subtitle}</Text>}
+               
+               {actionHint && (
+                 <View style={styles.hintContainer}>
+                    <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.9)" />
+                    <Text style={styles.hintText}>{actionHint}</Text>
+                 </View>
+               )}
+            </Animated.View>
+          ) : null}
+
+          {children}
+        </View>
+      </SafeAreaView>
+    </LinearGradient>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingBottom: spacing.md,
+    ...Platform.select({
+      ios: { shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 },
+      android: { elevation: 8 },
+      web: { position: 'sticky', top: 0, zIndex: 100 }
+    }),
+  },
+  safeArea: {},
+  inner: {
+    paddingVertical: spacing.md,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: 54,
+  },
+  identityGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  identityText: {
+    alignItems: 'flex-start',
+  },
+  userName: {
+    ...typography.bodyBold,
+    fontSize: 14,
+  },
+  userRole: {
+    ...typography.small,
+    fontSize: 10,
+    marginTop: -2,
+    fontFamily: 'Tajawal_700Bold',
+  },
+  titleOnly: {
+    alignItems: 'flex-start',
+  },
+  mainTitle: {
+    ...typography.h3,
+  },
+  mainSubtitle: {
+    ...typography.caption,
+    fontSize: 12,
+  },
+  actionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pageTitleRow: {
+    marginTop: spacing.xs,
+    alignItems: 'flex-start',
+  },
+  h1: {
+    ...typography.h2,
+    fontSize: 22,
+    letterSpacing: -0.5,
+  },
+  hSub: {
+    ...typography.caption,
+    fontSize: 13,
+    marginTop: -2,
+    textAlign: 'right',
+  },
+  hintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.xs,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  hintText: {
+    ...typography.small,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'Tajawal_700Bold',
+  },
+});

@@ -1,0 +1,142 @@
+================================================================================
+CODFILATE — SUPABASE SETUP (run SQL files in this order on a NEW project)
+================================================================================
+
+If you skip files or run them out of order, RLS (row-level security) and roles
+will break: the app will load but lists stay empty, orders vanish, or actions
+fail with "permission denied".
+
+--------------------------------------------------------------------------------
+1) BASE SCHEMA + EXTENSIONS
+--------------------------------------------------------------------------------
+  1. schema.sql
+  2. migration_01_enums.sql
+  3. migration_02_tables.sql
+
+  NOTE: migration_roles_delivery.sql is an ALTERNATIVE bundle that overlaps
+  migration_01_enums + migration_02_tables. Do NOT run migration_roles_delivery
+  if you already ran steps 2–3 above.
+
+--------------------------------------------------------------------------------
+2) FEATURES ON TOP OF BASE
+--------------------------------------------------------------------------------
+  4. migration_categories.sql
+  5. migration_returned_status.sql
+  6. migration_production_saas.sql
+  7. migration_marketplace_workflow.sql
+  8. migration_rm_wilaya_rls_and_merchant_activation.sql
+  9. bucket_setup.sql   (create storage buckets — run after tables exist)
+  10. migration_remove_delivery_company_role.sql   (required on existing DBs that
+      ever used role delivery_company: migrates rows to admin + RLS)
+  11. migration_admin_provision_rm_activate.sql   (HQ: activate any merchant;
+      provision regional managers by email; stricter RM wilaya check)
+  12. migration_rm_profile_covers_wilaya_rls.sql   (RM sees orders in wilaya:
+      one SQL function for wilaya_id + assigned_wilayas JSON; fixes empty lists)
+
+--------------------------------------------------------------------------------
+3) APP ENVIRONMENT (Expo)
+--------------------------------------------------------------------------------
+  Copy .env.example to .env and set at least:
+    EXPO_PUBLIC_SUPABASE_URL
+    EXPO_PUBLIC_SUPABASE_ANON_KEY
+
+  Restart the dev server after changing .env.
+
+--------------------------------------------------------------------------------
+4) WHO CAN SIGN UP IN THE APP
+--------------------------------------------------------------------------------
+  The register screen only creates:
+    - merchant
+    - affiliate (marketer)
+
+  Staff roles are NOT self-serve: create the Auth user in Supabase Dashboard
+  (Authentication → Users → Add user), then set their profile row.
+
+--------------------------------------------------------------------------------
+5) SET ROLES FOR USERS YOU CREATED IN SUPABASE (SQL Editor)
+--------------------------------------------------------------------------------
+  Four roles (aligned with the business plan):
+    1) admin = الإدارة العليا — HQ, كل الولايات، إدارة المدراء الإقليميين،
+       إعدادات المنصة، التقارير والأرباح الشاملة؛ عمولة 50 دج/طلبية (من platform_settings).
+    2) regional_manager = المدير الإقليمي — ولاية أو عدة ولايات؛ منتجات، مخزون
+       محلي، طلبيات، توصيل عبر الشركة الداخلية، مدفوعات المسوقين؛ 150 دج/طلبية.
+    3) merchant = التاجر
+    4) affiliate = المسوق
+
+  Each login has ONE row in public.profiles. Supabase Auth only stores
+  credentials — you set role here.
+
+  Incoming delivery_requests attach to the HQ admin profile (column
+  delivery_company_id = that admin's profiles.id — اسم عمود تاريخي).
+
+  Optional: أول admin يطابق ولاية الطلب عبر wilaya_id / assigned_wilayas؛
+  وإلا يُستخدم أقدم حساب admin (تغطية وطنية).
+
+  IMPORTANT:
+    - Run migration_remove_delivery_company_role.sql if upgrading an old DB.
+    - Users created in the Dashboard often get profile role 'affiliate' by
+      default until you UPDATE them (especially your merchant).
+
+  Steps:
+    1) Supabase → SQL → New query.
+    2) Pick the wilaya number for each regional manager.
+       List wilayas:  SELECT id, code, name FROM public.wilayas ORDER BY id;
+       Example: id 16 = Alger — use the same id in wilaya_id AND inside
+       assigned_wilayas, e.g. '[16]'::jsonb.
+    3) Paste ONE of the patterns below (by email is easiest — no UUID copy).
+
+  --- Update BY EMAIL (recommended) ------------------------------------------
+
+     -- الإدارة العليا (HQ): كل النظام؛ [] = first admin used as nationwide carrier for RM-created deliveries
+     UPDATE public.profiles
+       SET role = 'admin',
+           wilaya_id = NULL,
+           assigned_wilayas = '[]'::jsonb,
+           onboarding_completed = true
+     WHERE user_id = (SELECT id FROM auth.users WHERE email = 'admin@gmail.com');
+
+     -- Regional manager: replace BOTH 16 values if you use another wilaya.
+     UPDATE public.profiles
+       SET role = 'regional_manager',
+           wilaya_id = 16,
+           assigned_wilayas = '[16]'::jsonb,
+           onboarding_completed = true
+     WHERE user_id = (SELECT id FROM auth.users WHERE email = 'reg@gmail.com');
+
+     -- Merchant (can complete store onboarding in the app)
+     UPDATE public.profiles
+       SET role = 'merchant',
+           onboarding_completed = false
+     WHERE user_id = (SELECT id FROM auth.users WHERE email = 'ni3yyn@gmail.com');
+
+     -- Affiliate / marketer
+     UPDATE public.profiles
+       SET role = 'affiliate',
+           onboarding_completed = true
+     WHERE user_id = (SELECT id FROM auth.users WHERE email = 'xtra.alem@gmail.com');
+
+  --- Check it worked ----------------------------------------------------------
+     SELECT u.email, p.role, p.wilaya_id, p.assigned_wilayas, p.onboarding_completed
+     FROM auth.users u
+     JOIN public.profiles p ON p.user_id = u.id
+     WHERE u.email IN (
+       'admin@gmail.com',
+       'reg@gmail.com',
+       'ni3yyn@gmail.com',
+       'xtra.alem@gmail.com'
+     )
+     ORDER BY u.email;
+
+  If a user appears in auth.users but has NO profile row, the signup trigger
+  may not have run. Create one in Dashboard by having them "sign up" once in
+  the app, or insert profile manually (advanced).
+
+--------------------------------------------------------------------------------
+6) WHAT IS NOT IN THE APP YET (do not expect these in the UI)
+--------------------------------------------------------------------------------
+  Examples that may still be missing from a full business plan: 2FA, email
+  verification flows beyond basic Supabase settings, full audit log UI,
+  marketer payout dual-confirmation, etc. The database and screens implement
+  the marketplace + roles + RM activation path described in the migrations.
+
+================================================================================
