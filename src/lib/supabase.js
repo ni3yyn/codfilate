@@ -4,11 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { appConfig } from './appConfig';
 
-const supabaseUrl = appConfig.supabase.url;
-const supabaseAnonKey = appConfig.supabase.anonKey;
+// Guard credentials to prevent top-level crash in production builds if config is missing
+const supabaseUrl = appConfig.supabase.url || 'https://placeholder.supabase.co';
+const supabaseAnonKey = appConfig.supabase.anonKey || 'placeholder';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('[Supabase] Missing credentials in customer config. Check customers/<id>/config.json');
+if (!appConfig.supabase.url || !appConfig.supabase.anonKey) {
+  // We use warn instead of error to prevent some crash reporting tools from killing the app
+  console.warn('[Supabase] Missing credentials in customer config.');
 }
 
 const customStorage = Platform.OS === 'web' ? {

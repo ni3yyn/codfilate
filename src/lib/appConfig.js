@@ -6,7 +6,12 @@
 
 import Constants from 'expo-constants';
 
-const customerConfig = Constants.expoConfig?.extra?.customerConfig || {};
+const rawConfig = Constants.expoConfig || Constants.manifest2?.extra?.expoConfig || {};
+const customerConfig = rawConfig.extra?.customerConfig || {};
+
+if (!rawConfig.extra?.customerConfig && !__DEV__) {
+  console.warn('[AppConfig] No customer configuration found in production manifest.');
+}
 
 export const appConfig = {
   // Branding

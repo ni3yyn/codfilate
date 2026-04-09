@@ -23,18 +23,21 @@ import { colors, typography, spacing, borderRadius } from '../src/theme/theme';
 // Keep splash screen visible while loading resources
 SplashScreen.preventAutoHideAsync();
 
-// Enforce RTL universally for the Arabic UI
-try {
-  I18nManager.allowRTL(true);
-  I18nManager.forceRTL(true);
-  
-  // Extra help for Web platform to follow RTL layout
-  if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    document.documentElement.dir = 'rtl';
-    document.body.dir = 'rtl';
-  }
-} catch (e) {
-  if (__DEV__) console.warn('RTL Error:', e);
+// Enforce RTL universally for the Arabic UI (Safe Management)
+function useRTL() {
+  useEffect(() => {
+    try {
+      I18nManager.allowRTL(true);
+      I18nManager.forceRTL(true);
+      
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        document.documentElement.dir = 'rtl';
+        document.body.dir = 'rtl';
+      }
+    } catch (e) {
+      console.warn('RTL Setup Error:', e);
+    }
+  }, []);
 }
 
 // Error Boundary Class Component
@@ -123,6 +126,7 @@ const errorStyles = StyleSheet.create({
 });
 
 export default function RootLayout() {
+  useRTL();
   const initialize = useAuthStore((s) => s.initialize);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
