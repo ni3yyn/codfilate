@@ -19,6 +19,7 @@ import { useAlertStore } from '../src/stores/useAlertStore';
 import GlobalAlert from '../src/components/ui/GlobalAlert';
 import { getHomeForRole } from '../src/lib/roleRouter';
 import { colors, typography, spacing, borderRadius } from '../src/theme/theme';
+import { appConfig } from '../src/lib/appConfig';
 
 // Keep splash screen visible while loading resources
 SplashScreen.preventAutoHideAsync();
@@ -125,6 +126,41 @@ const errorStyles = StyleSheet.create({
   },
 });
 
+function DiagnosticScreen() {
+  const info = appConfig.debugInfo;
+  return (
+    <View style={[diagnosticStyles.container, { backgroundColor: '#0A0A1A' }]}>
+      <View style={diagnosticStyles.card}>
+        <Ionicons name="bug" size={48} color="#FF7675" />
+        <Text style={diagnosticStyles.title}>تنبيه: خطأ في التهيئة</Text>
+        <Text style={diagnosticStyles.subtitle}>التطبيق غير مهيأ بشكل صحيح للعمل في بيئة الإنتاج.</Text>
+        
+        <View style={diagnosticStyles.logs}>
+          <Text style={diagnosticStyles.logLine}>• Constants.expoConfig: {info.hasConstants ? '✅ OK' : '❌ Missing'}</Text>
+          <Text style={diagnosticStyles.logLine}>• Manifest2 Detail: {info.hasManifest2 ? '✅ OK' : '❌ Missing'}</Text>
+          <Text style={diagnosticStyles.logLine}>• Customer Data: {info.hasCustomerConfig ? '✅ OK' : '❌ Missing'}</Text>
+          <Text style={diagnosticStyles.logLine}>• Target Customer: {info.customerId}</Text>
+          <Text style={diagnosticStyles.logLine}>• Supabase Status: {appConfig.isConfigured ? '✅ OK' : '❌ NOT Configured'}</Text>
+        </View>
+
+        <Text style={diagnosticStyles.footer}>
+          يرجى التحقق من ملفات app.config.js و config.json أثناء عملية البناء.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const diagnosticStyles = StyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', padding: 20 },
+  card: { backgroundColor: '#13132B', padding: 24, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  title: { fontFamily: 'Tajawal_700Bold', fontSize: 22, color: '#F0F0FF', marginTop: 16, textAlign: 'center' },
+  subtitle: { fontFamily: 'Tajawal_400Regular', fontSize: 14, color: '#9CA3C0', marginVertical: 12, textAlign: 'center' },
+  logs: { backgroundColor: 'rgba(0,0,0,0.3)', padding: 16, borderRadius: 12, marginVertical: 16 },
+  logLine: { fontFamily: 'monospace', fontSize: 13, color: '#55EFC4', marginBottom: 4 },
+  footer: { fontFamily: 'Tajawal_400Regular', fontSize: 12, color: '#636E72', textAlign: 'center', marginTop: 8 }
+});
+
 export default function RootLayout() {
   useRTL();
   const initialize = useAuthStore((s) => s.initialize);
@@ -205,6 +241,11 @@ export default function RootLayout() {
 
   if (!fontsLoaded && !fontError) {
     return null;
+  }
+
+  // DIAGNOSTIC CHECK: If app is misconfigured in production, show the error interface
+  if (!appConfig.isConfigured && !__DEV__) {
+    return <DiagnosticScreen />;
   }
 
   return (

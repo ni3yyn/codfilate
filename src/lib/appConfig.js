@@ -64,5 +64,12 @@ export const appConfig = {
     enableCategories: customerConfig.features?.enableCategories ?? true,
     maxProductImages: customerConfig.features?.maxProductImages ?? 8,
     enableAdminPanel: customerConfig.features?.enableAdminPanel ?? false,
-  },
+  // Diagnostics
+  isConfigured: !!customerConfig.supabase?.url && !!customerConfig.supabase?.anonKey,
+  debugInfo: {
+    hasConstants: !!Constants.expoConfig,
+    hasManifest2: !!Constants.manifest2,
+    hasCustomerConfig: !!customerConfig.appName,
+    customerId: rawConfig.extra?.customerId || 'unknown',
+  }
 };
