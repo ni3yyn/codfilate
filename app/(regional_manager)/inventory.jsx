@@ -1,126 +1,192 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  View, Text, FlatList, TextInput, StyleSheet, RefreshControl,
-  TouchableOpacity, Image, Linking, Platform
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../src/hooks/useTheme';
-import { useAuthStore } from '../../src/stores/useAuthStore';
-import { useRegionalManagerStore } from '../../src/stores/useRegionalManagerStore';
-import { useAlertStore } from '../../src/stores/useAlertStore';
-import UniversalHeader from '../../src/components/ui/UniversalHeader';
-import { getEffectiveWilayaIds } from '../../src/lib/profileUtils';
-import { supabase } from '../../src/lib/supabase';
-import Card from '../../src/components/ui/Card';
-import Button from '../../src/components/ui/Button';
-import FAB from '../../src/components/ui/FAB';
-import BottomSheet from '../../src/components/ui/BottomSheet';
-import Modal from '../../src/components/ui/Modal';
-import StatCard from '../../src/components/ui/StatCard';
-import LoadingSpinner from '../../src/components/ui/LoadingSpinner';
-import EmptyState from '../../src/components/ui/EmptyState';
-import { typography, spacing, borderRadius } from '../../src/theme/theme';
-import { useResponsive } from '../../src/hooks/useResponsive';
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  Image,
+  Platform,
+  Linking,
+  TextInput,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../src/hooks/useTheme";
+import { useAuthStore } from "../../src/stores/useAuthStore";
+import { useRegionalManagerStore } from "../../src/stores/useRegionalManagerStore";
+import { useAlertStore } from "../../src/stores/useAlertStore";
+import { getEffectiveWilayaIds } from "../../src/lib/profileUtils";
+import { supabase } from "../../src/lib/supabase";
+import UniversalHeader from "../../src/components/ui/UniversalHeader";
+import Card from "../../src/components/ui/Card";
+import Button from "../../src/components/ui/Button";
+import BottomSheet from "../../src/components/ui/BottomSheet";
+import StatCard from "../../src/components/ui/StatCard";
+import LoadingSpinner from "../../src/components/ui/LoadingSpinner";
+import EmptyState from "../../src/components/ui/EmptyState";
+import Input from "../../src/components/ui/Input";
+import { typography, spacing, borderRadius, shadows } from "../../src/theme/theme";
+import { formatCurrency } from "../../src/lib/utils";
+import { useResponsive } from "../../src/hooks/useResponsive";
+import { useFAB } from "../../src/hooks/useFAB";
 
 /**
- * Premium Regional Manager Inventory Screen.
- * Forest/Mint theme, real-time filtering, summary stats, and quick adjustment.
+ * Premium Inventory Management Screen for Regional Managers.
+ * Grouped by Wilaya, features stock adjustment and merchant contact.
  */
-export default function RegionalInventoryScreen() {
+export default function InventoryScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { isWide, maxContentWidth, contentPadding } = useResponsive();
+  const { showAlert } = useAlertStore();
   const profile = useAuthStore((s) => s.profile);
-  const wilayaIds = useMemo(() => getEffectiveWilayaIds(profile), [profile]);
+  const myWilayaIds = useMemo(() => getEffectiveWilayaIds(profile), [profile]);
 
   const {
-    inventory, inventoryStats, fetchInventory, adjustStock, addInventoryProduct, isLoading
+    inventory,
+    inventoryStats,
+    fetchInventory,
+    adjustStock,
+    isLoading,
   } = useRegionalManagerStore();
-  const { showAlert } = useAlertStore();
 
-  const [search, setSearch] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-  // Adjustment State
-  const [isAdjustSheetVisible, setIsAdjustSheetVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [productSearch, setProductSearch] = useState('');
-  const [allProducts, setAllProducts] = useState([]);
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [deltaValue, setDeltaValue] = useState('');
+  const [search, setSearch] = useState("");
+  const [selectedWilayaId, setSelectedWilayaId] = useState(null);
+  
+  // Modals
+  const [adjustingItem, setAdjustingItem] = useState(null);
+  const [adjustmentAmount, setAdjustmentAmount] = useState("");
+  const [adjustmentNote, setAdjustmentNote] = useState("");
+  const [isAdjusting, setIsAdjusting] = useState(false);
 
-  const load = useCallback(async (s = search) => {
-    if (!wilayaIds.length) return;
-    await fetchInventory(wilayaIds, s);
-  }, [wilayaIds, fetchInventory, search]);
+  // Store Phone Stitching
+  const [storePhones, setStorePhones] = useState({});
 
-  useEffect(() => { load(); }, [wilayaIds]);
+  const loadData = useCallback(async () => {
+    const ids = myWilayaIds.length > 0 ? myWilayaIds : null;
+    await fetchInventory(ids);
+  }, [myWilayaIds, fetchInventory]);
+
+  useEffect(() => {
+    loadData();
+    if (myWilayaIds.length > 0 && !selectedWilayaId) {
+      setSelectedWilayaId(myWilayaIds[0]);
+    }
+  }, [loadData, myWilayaIds]);
+
+  // Fetch missing phones for merchants
+  useEffect(() => {
+    const fetchPhones = async () => {
+      const uniqueStoreIds = [...new Set(inventory.map(i => i.store_id).filter(id => id && !storePhones[id]))];
+      if (uniqueStoreIds.length === 0) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('store_id, phone')
+        .in('store_id', uniqueStoreIds)
+        .eq('role', 'merchant');
+
+      if (data) {
+        const newPhones = { ...storePhones };
+        data.forEach(p => {
+          if (p.store_id) newPhones[p.store_id] = p.phone;
+        });
+        setStorePhones(newPhones);
+      }
+    };
+    fetchPhones();
+  }, [inventory]);
+
+  // Register centralized FAB
+  useFAB({
+    icon: 'add',
+    label: 'إضافة منتج',
+    onPress: () => showAlert({ 
+      title: "قريباً", 
+      message: "سيتم تفعيل إضافة منتجات جديدة يدوياً في التحديث القادم. حالياً المنتجات تضاف عن طريق النظام تلقائياً.", 
+      type: "info" 
+    }),
+    visible: true,
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await load();
+    await loadData();
     setRefreshing(false);
   };
 
-  const handleAdjust = async (item, delta) => {
-    const d = parseInt(delta, 10);
-    if (!d || isNaN(d)) return;
+  const filteredInventory = useMemo(() => {
+    let list = inventory;
+    if (selectedWilayaId) {
+      list = list.filter(item => item.wilaya_id === selectedWilayaId);
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(item => 
+        item.product_name?.toLowerCase().includes(q) || 
+        item.category_name?.toLowerCase().includes(q) ||
+        item.store_name?.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [inventory, selectedWilayaId, search]);
 
-    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  const handleAdjustStock = async () => {
+    if (!adjustingItem || !adjustmentAmount) return;
+    
+    const delta = parseInt(adjustmentAmount);
+    if (isNaN(delta) || delta === 0) {
+      showAlert({ title: "خطأ", message: "يرجى إدخال كمية صحيحة", type: "error" });
+      return;
+    }
 
-    const res = await adjustStock(item.product_id, item.wilaya_id, d, 'تعديل يدوِي من المدير الإقليمي');
+    setIsAdjusting(true);
+    // CRITICAL FIX: Ensure wilaya_id is passed from the item
+    const res = await adjustStock(
+      adjustingItem.product_id, 
+      adjustingItem.wilaya_id, 
+      delta, 
+      adjustmentNote
+    );
+    setIsAdjusting(false);
+
     if (res.success) {
-      setIsAdjustSheetVisible(false);
-      setSelectedItem(null);
-      setDeltaValue('');
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert({ title: 'تم التحديث', message: 'تم تعديل الكمية بنجاح ✓', type: 'success' });
+      setAdjustingItem(null);
+      setAdjustmentAmount("");
+      setAdjustmentNote("");
+      // Refresh to get updated quantity/stats
+      loadData();
     } else {
-      showAlert({ title: 'خطأ', message: res.error, type: 'destructive' });
+      showAlert({ title: "فشل التحديث", message: res.error, type: "error" });
     }
   };
 
-  const fetchProductsToRegister = async () => {
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, image_url, category')
-      .eq('is_active', true)
-      .order('name');
-    if (!error) setAllProducts(data || []);
-  };
-
-  const handleAddProduct = async (product) => {
-    const targetWilaya = wilayaIds[0] || profile.wilaya_id;
-    if (!targetWilaya) return;
-
-    const res = await addInventoryProduct(product.id, targetWilaya, 0);
-    if (res.success) {
-      setAddModalVisible(false);
-      setProductSearch('');
-      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showAlert({ title: 'تمت الإضافة', message: 'المنتج متوفر الآن في مستودعك.', type: 'success' });
+  const callMerchant = (storeId) => {
+    const phone = storePhones[storeId];
+    if (phone) {
+      Linking.openURL(`tel:${phone}`);
     } else {
-      showAlert({ title: 'خطأ', message: res.error, type: 'destructive' });
+      showAlert({ title: "غير متاح", message: "رقم هاتف التاجر غير متوفر حالياً", type: "info" });
     }
   };
 
-  const filteredProducts = allProducts.filter(p => 
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) &&
-    !inventory.some(existing => existing.product_id === p.id)
-  );
+  return (
+    <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
+      <UniversalHeader 
+        title="المخزون الإقليمي" 
+        subtitle="إدارة توفر المنتجات في مستودعاتك"
+      />
 
-  const getStockStatus = (qty) => {
-    if (qty === 0) return { label: 'نافذ', color: '#D63031', bg: '#D6303115' };
-    if (qty < 5) return { label: 'حرج', color: '#E17055', bg: '#E1705515' };
-    if (qty < 10) return { label: 'منخفض', color: '#FDCB6E', bg: '#FDCB6E15' };
-    return { label: 'متوفر', color: theme.primary, bg: theme.primary + '15' };
-  };
-
-  const HeaderSummary = () => (
-    <View style={styles.summaryContainer}>
-      <View style={styles.statsRow}>
+      {/* Stats Summary */}
+      <View style={[styles.statsRow, isWide && { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%', paddingHorizontal: contentPadding }]}>
         <StatCard 
-          title="إجمالي المنتجات" 
+          title="الإجمالي" 
           value={inventoryStats.totalSkus} 
           icon="cube" 
           color={theme.primary} 
@@ -129,12 +195,12 @@ export default function RegionalInventoryScreen() {
         <StatCard 
           title="مخزون منخفض" 
           value={inventoryStats.lowStock} 
-          icon="warning" 
+          icon="alert-circle" 
           color="#FDCB6E" 
           size="small"
         />
         <StatCard 
-          title="نافذ" 
+          title="نفذت" 
           value={inventoryStats.outOfStock} 
           icon="close-circle" 
           color="#D63031" 
@@ -142,275 +208,162 @@ export default function RegionalInventoryScreen() {
         />
       </View>
 
-      <View style={styles.searchBarContainer}>
-        <View style={[styles.searchBox, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }]}>
-          <Ionicons name="search" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 10 }} />
+      {/* Search & Filter */}
+      <View style={[styles.searchBar, { borderBottomColor: theme.colors.border }, isWide && { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%', paddingHorizontal: contentPadding }]}>
+        <View style={[styles.searchInputWrapper, { backgroundColor: theme.colors.surfaceElevated }]}>
+          <Ionicons name="search" size={18} color={theme.colors.textTertiary} />
           <TextInput
-            placeholder="ابحث عن منتج أو متجر..."
+            style={[styles.searchInput, { color: theme.colors.text }]}
+            placeholder="بحث في المنتجات، التصنيفات، المتاجر..."
             placeholderTextColor={theme.colors.textTertiary}
             value={search}
-            onChangeText={(t) => { setSearch(t); load(t); }}
-            style={[styles.searchInput, { color: theme.colors.text }]}
+            onChangeText={setSearch}
           />
-          {!!search && (
-            <TouchableOpacity onPress={() => { setSearch(''); load(''); }}>
-              <Ionicons name="close-circle" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 10 }} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
-    </View>
-  );
 
-  const renderStockItem = ({ item }) => {
-    const status = getStockStatus(item.quantity);
-
-    return (
-      <Card style={styles.stockCard}>
-        <View style={styles.itemMain}>
-          <View style={[styles.imageContainer, { backgroundColor: theme.colors.surfaceElevated }]}>
-            {item.product_image ? (
-              <Image source={{ uri: item.product_image }} style={styles.productImage} />
-            ) : (
-              <Ionicons name="cube-outline" size={30} color={theme.colors.textTertiary} />
-            )}
-          </View>
-          
-          <View style={styles.infoContainer}>
-            <Text style={[styles.productName, { color: theme.colors.text }]} numberOfLines={1}>
-              {item.product_name || 'منتج غير معروف'}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Ionicons name="storefront-outline" size={12} color={theme.colors.textTertiary} />
-              <Text style={[styles.categoryText, { color: theme.colors.textSecondary }]}>
-                {item.store_name || 'متجر غير معروف'} • {item.category_name}
-              </Text>
-            </View>
-            <View style={styles.metaRow}>
-              <View style={[styles.statusBadge, { backgroundColor: status.bg }]}>
-                <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-              </View>
-              <Text style={[styles.qtyText, { color: theme.colors.textSecondary }]}>
-                الكمية: <Text style={{ color: status.color, fontFamily: 'Tajawal_700Bold' }}>{item.quantity}</Text>
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {item.merchant_phone && (
-              <TouchableOpacity 
-                style={[styles.quickAdjustBtn, { backgroundColor: theme.primary + '15' }]}
-                onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  Linking.openURL(`tel:${item.merchant_phone}`);
-                }}
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          isWide && { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%', paddingHorizontal: contentPadding }
+        ]}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+        }
+      >
+        {/* Wilaya Filter Chips */}
+        {myWilayaIds.length > 1 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+            {myWilayaIds.map(id => (
+              <TouchableOpacity
+                key={id}
+                style={[
+                  styles.filterChip,
+                  { backgroundColor: selectedWilayaId === id ? theme.primary : theme.colors.surfaceElevated },
+                  selectedWilayaId === id && shadows.sm
+                ]}
+                onPress={() => setSelectedWilayaId(id)}
               >
-                <Ionicons name="call" size={18} color={theme.primary} />
+                <Text style={[styles.filterChipText, { color: selectedWilayaId === id ? 'white' : theme.colors.textSecondary }]}>
+                   ولاية {id}
+                </Text>
               </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity 
-              style={[styles.quickAdjustBtn, { backgroundColor: theme.colors.surfaceElevated }]}
-              onPress={() => {
-                setSelectedItem(item);
-                setIsAdjustSheetVisible(true);
-                setDeltaValue('');
-              }}
+            ))}
+            <TouchableOpacity
+              style={[
+                styles.filterChip,
+                { backgroundColor: selectedWilayaId === null ? theme.primary : theme.colors.surfaceElevated }
+              ]}
+              onPress={() => setSelectedWilayaId(null)}
             >
-              <Ionicons name="add-circle-outline" size={24} color={theme.primary} />
+              <Text style={[styles.filterChipText, { color: selectedWilayaId === null ? 'white' : theme.colors.textSecondary }]}>
+                كل الولايات
+              </Text>
             </TouchableOpacity>
-          </View>
-        </View>
-
-        {item.merchant_phone && (
-          <View style={[styles.phoneLine, { backgroundColor: theme.colors.surfaceElevated }]}>
-            <Text style={[styles.phoneText, { color: theme.colors.textSecondary }]}>رقم التاجر: {item.merchant_phone} ({item.merchant_name})</Text>
-          </View>
+          </ScrollView>
         )}
 
-        {/* Removed inline adjustPanel - now handled by BottomSheet */}
-      </Card>
-    );
-  };
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader 
-        title="المخزون الإقليمي"
-        subtitle="إدارة وتتبع الكميات المتوفرة في مستودعك"
-      />
-      <FlatList
-        data={inventory}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={HeaderSummary}
-        renderItem={renderStockItem}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
-        contentContainerStyle={[styles.listContent, isWide && { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%', paddingHorizontal: contentPadding }]}
-        ListEmptyComponent={
-          !isLoading ? (
-            <EmptyState 
-              icon="cube-outline" 
-              title="المستودع فارغ" 
-              message="لا توجد منتجات مسجلة في مستودعك الإقليمي بعد."
-            />
-          ) : <LoadingSpinner />
-        }
-      />
-
-      <FAB 
-        label="إضافة منتج للمستودع" 
-        onPress={() => {
-          fetchProductsToRegister();
-          setAddModalVisible(true);
-        }} 
-        visible={!addModalVisible}
-      />
-
-      {/* Add Product Flow - Responsive Choice */}
-      {Platform.OS === 'web' ? (
-        <Modal
-          visible={addModalVisible}
-          onClose={() => setAddModalVisible(false)}
-          title="إضافة منتج للمستودع"
-          subtitle="اختر منتجاً من القائمة الرسمية لتبدأ في تتبع مخزونه في ولايتك."
-          maxWidth={700}
-        >
-          <View style={{ gap: spacing.md }}>
-            <View style={[styles.searchBox, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}>
-              <Ionicons name="search" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 10 }} />
-              <TextInput
-                placeholder="ابحث عن منتج جديد..."
-                placeholderTextColor={theme.colors.textTertiary}
-                value={productSearch}
-                onChangeText={setProductSearch}
-                style={[styles.searchInput, { color: theme.colors.text }]}
-              />
-            </View>
-
-            <FlatList
-              data={filteredProducts}
-              keyExtractor={p => p.id}
-              style={{ maxHeight: 500 }}
-              showsVerticalScrollIndicator={true}
-              nestedScrollEnabled
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={[styles.productSelectItem, { borderBottomColor: theme.colors.divider }]}
-                  onPress={() => handleAddProduct(item)}
-                >
-                  {item.image_url ? (
-                    <Image source={{ uri: item.image_url }} style={styles.pickerImg} />
-                  ) : (
-                    <View style={[styles.pickerImg, { backgroundColor: theme.colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }]}>
-                      <Ionicons name="cube" size={16} color={theme.colors.textTertiary} />
-                    </View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.productName, { color: theme.colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.categoryText, { color: theme.colors.textTertiary }]}>{item.category || 'بدون تصنيف'}</Text>
+        {filteredInventory.length === 0 && !isLoading ? (
+          <EmptyState 
+            icon="cube-outline"
+            title="لا توجد منتجات"
+            message={search ? "لم نجد أي منتج يطابق بحثك" : "لا يوجد مخزون مسجل في هذه المنطقة حتى الآن"}
+          />
+        ) : (
+          filteredInventory.map((item) => {
+            const isLow = item.quantity > 0 && item.quantity < 10;
+            const isOut = item.quantity === 0;
+            
+            return (
+              <Card key={`${item.product_id}-${item.wilaya_id}`} style={styles.productCard}>
+                <View style={styles.cardMain}>
+                  <View style={styles.imageContainer}>
+                    {item.product_image ? (
+                      <Image source={{ uri: item.product_image }} style={styles.productImage} />
+                    ) : (
+                      <View style={[styles.imagePlaceholder, { backgroundColor: theme.colors.surface }]}>
+                        <Ionicons name="cube" size={24} color={theme.colors.textTertiary} />
+                      </View>
+                    )}
+                    {isLow && <View style={[styles.badge, styles.lowBadge]}><Text style={styles.badgeText}>منخفض</Text></View>}
+                    {isOut && <View style={[styles.badge, styles.outBadge]}><Text style={styles.badgeText}>نافيذ</Text></View>}
                   </View>
-                  <Ionicons name="add-circle" size={24} color={theme.primary} />
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={{ textAlign: 'center', color: theme.colors.textTertiary, marginVertical: 20 }}>
-                  لا توجد منتجات جديدة متاحة للتسجيل
-                </Text>
-              }
-            />
-          </View>
-        </Modal>
-      ) : (
-        <BottomSheet
-          visible={addModalVisible}
-          onClose={() => setAddModalVisible(false)}
-          title="إضافة منتج للمستودع"
-          subtitle="اختر منتجاً من القائمة الرسمية لتبدأ في تتبع مخزونه في ولايتك."
-        >
-          <View style={{ gap: spacing.md }}>
-            <View style={[styles.searchBox, { backgroundColor: theme.colors.surface2, borderColor: theme.colors.border }]}>
-              <Ionicons name="search" size={20} color={theme.colors.textTertiary} style={{ marginHorizontal: 10 }} />
-              <TextInput
-                placeholder="ابحث عن منتج جديد..."
-                placeholderTextColor={theme.colors.textTertiary}
-                value={productSearch}
-                onChangeText={setProductSearch}
-                style={[styles.searchInput, { color: theme.colors.text }]}
-              />
-            </View>
 
-            <FlatList
-              data={filteredProducts}
-              keyExtractor={p => p.id}
-              style={{ maxHeight: 400 }}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={[styles.productSelectItem, { borderBottomColor: theme.colors.divider }]}
-                  onPress={() => handleAddProduct(item)}
-                >
-                  {item.image_url ? (
-                    <Image source={{ uri: item.image_url }} style={styles.pickerImg} />
-                  ) : (
-                    <View style={[styles.pickerImg, { backgroundColor: theme.colors.surfaceElevated, alignItems: 'center', justifyContent: 'center' }]}>
-                      <Ionicons name="cube" size={16} color={theme.colors.textTertiary} />
+                  <View style={styles.details}>
+                    <Text style={[styles.productName, { color: theme.colors.text }]} numberOfLines={1}>{item.product_name}</Text>
+                    <Text style={[styles.storeName, { color: theme.colors.textTertiary }]}>{item.store_name} · {item.category_name}</Text>
+                    
+                    <View style={styles.stockInfo}>
+                      <Text style={[styles.quantityLabel, { color: theme.colors.textSecondary }]}>الكمية المتوفرة:</Text>
+                      <Text style={[
+                        styles.quantityValue, 
+                        { color: isOut ? theme.colors.error : isLow ? '#F39C12' : theme.primary }
+                      ]}>
+                        {item.quantity} {item.unit || 'قطع'}
+                      </Text>
                     </View>
-                  )}
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.productName, { color: theme.colors.text }]}>{item.name}</Text>
-                    <Text style={[styles.categoryText, { color: theme.colors.textTertiary }]}>{item.category || 'بدون تصنيف'}</Text>
                   </View>
-                  <Ionicons name="add-circle" size={24} color={theme.primary} />
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={{ textAlign: 'center', color: theme.colors.textTertiary, marginVertical: 20 }}>
-                  لا توجد منتجات جديدة متاحة للتسجيل
-                </Text>
-              }
-            />
-          </View>
-        </BottomSheet>
-      )}
-      {/* Stock Adjustment Sheet */}
+                </View>
+
+                <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+
+                <View style={styles.actions}>
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, { backgroundColor: theme.primary + '10' }]}
+                    onPress={() => setAdjustingItem(item)}
+                  >
+                    <Ionicons name="add" size={18} color={theme.primary} />
+                    <Text style={[styles.actionBtnText, { color: theme.primary }]}>إضافة كمية</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.actionBtn, { backgroundColor: '#F1F2F6' }]}
+                    onPress={() => callMerchant(item.store_id)}
+                  >
+                    <Ionicons name="call" size={16} color={theme.colors.textSecondary} />
+                    <Text style={[styles.actionBtnText, { color: theme.colors.textSecondary }]}>اتصل بالمورد</Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            );
+          })
+        )}
+
+        <View style={styles.footerSpacer} />
+      </ScrollView>
+
+      {/* Adjustment Bottom Sheet */}
       <BottomSheet
-        visible={isAdjustSheetVisible}
-        onClose={() => setIsAdjustSheetVisible(false)}
+        visible={!!adjustingItem}
+        onClose={() => setAdjustingItem(null)}
         title="تعديل المخزون"
-        subtitle={`تعديل كمية ${selectedItem?.product_name || 'المنتج'}`}
+        subtitle={adjustingItem?.product_name}
       >
-        <View style={styles.adjustPanel}>
-          <Text style={[styles.qtyLabel, { color: theme.colors.textSecondary }]}>الكمية الحالية: {selectedItem?.quantity || 0}</Text>
+        <View style={styles.modalContent}>
+          <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>أدخل الكمية المضافة (استخدم رقم سالب للسحب):</Text>
+          <Input 
+            placeholder="مثال: 50 أو -10"
+            keyboardType="numeric"
+            value={adjustmentAmount}
+            onChangeText={setAdjustmentAmount}
+            icon="calculator-outline"
+          />
           
-          <View style={styles.quickButtons}>
-            <TouchableOpacity style={styles.pill} onPress={() => handleAdjust(selectedItem, 5)}>
-              <Text style={[styles.pillText, { color: theme.primary }]}>+5</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pill} onPress={() => handleAdjust(selectedItem, 10)}>
-              <Text style={[styles.pillText, { color: theme.primary }]}>+10</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.pill, { borderColor: '#D63031' }]} onPress={() => handleAdjust(selectedItem, -1)}>
-              <Text style={[styles.pillText, { color: '#D63031' }]}>-1</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.manualInputRow}>
-            <TextInput
-              placeholder="قيمة مخصصة (مثال: 15 أو -5)..."
-              placeholderTextColor={theme.colors.textTertiary}
-              keyboardType="numeric"
-              value={deltaValue}
-              onChangeText={setDeltaValue}
-              style={[styles.manualInput, { color: theme.colors.text, borderColor: theme.colors.border }]}
-            />
-            <Button 
-              title="تحديث" 
-              onPress={() => handleAdjust(selectedItem, deltaValue)} 
-              variant="gradient"
-              style={{ flex: 1, height: 48 }}
-            />
-          </View>
+          <Text style={[styles.modalLabel, { color: theme.colors.textSecondary, marginTop: 12 }]}>ملاحظة التعديل (اختياري):</Text>
+          <Input 
+            placeholder="مثلاً: دفعة رصيد جديدة"
+            value={adjustmentNote}
+            onChangeText={setAdjustmentNote}
+            icon="document-text-outline"
+          />
+
+          <Button 
+            title="تحديث المخزون"
+            onPress={handleAdjustStock}
+            loading={isAdjusting}
+            style={{ marginTop: 24 }}
+            variant="primary"
+          />
         </View>
       </BottomSheet>
     </SafeAreaView>
@@ -418,68 +371,148 @@ export default function RegionalInventoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  listContent: { padding: spacing.md, paddingBottom: 120 },
-  summaryContainer: { marginBottom: spacing.md },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  searchBarContainer: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  searchBox: {
+  root: { flex: 1 },
+  statsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  searchBar: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  searchInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 44,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  searchInput: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 48,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
+    fontFamily: "Tajawal_500Medium",
+    fontSize: 14,
+    textAlign: "right",
   },
-  searchInput: { flex: 1, ...typography.body, textAlign: 'right', paddingRight: spacing.sm },
-  stockCard: { padding: spacing.sm, marginBottom: spacing.sm },
-  itemMain: { flexDirection: 'row', alignItems: 'center' },
-  imageContainer: { width: 60, height: 60, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  productImage: { width: '100%', height: '100%' },
-  infoContainer: { flex: 1, marginHorizontal: spacing.md },
-  productName: { ...typography.bodyBold, fontSize: 16 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 12 },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  statusText: { fontSize: 11, fontFamily: 'Tajawal_700Bold' },
-  qtyText: { ...typography.small },
-  quickAdjustBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  adjustPanel: { marginTop: spacing.md, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: spacing.md },
-  quickButtons: { flexDirection: 'row', gap: 10, marginBottom: spacing.sm },
-  pill: { 
-    paddingHorizontal: 16, 
-    paddingVertical: 8, 
-    borderRadius: 20, 
-    borderWidth: 1, 
-    borderColor: 'rgba(0,0,0,0.1)',
+  scroll: {
+    padding: spacing.md,
+  },
+  filterScroll: {
+    flexDirection: "row",
+    marginBottom: spacing.md,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginEnd: 8,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_700Bold",
+  },
+  productCard: {
+    padding: 0,
+    marginBottom: spacing.md,
+    overflow: "hidden",
+  },
+  cardMain: {
+    flexDirection: "row",
+    padding: spacing.md,
+    gap: 16,
+  },
+  imageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    overflow: "hidden",
+    position: "relative",
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+  },
+  imagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badge: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 2,
+    alignItems: "center",
+  },
+  lowBadge: { backgroundColor: "#F39C12CC" },
+  outBadge: { backgroundColor: "#D63031CC" },
+  badgeText: { color: "white", fontSize: 10, fontFamily: "Tajawal_700Bold" },
+  details: {
     flex: 1,
-    alignItems: 'center'
+    justifyContent: "center",
   },
-  pillText: { ...typography.small, fontFamily: 'Tajawal_700Bold' },
-  qtyLabel: { ...typography.small, marginBottom: spacing.md, textAlign: 'center' },
-  manualInputRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  manualInput: { 
-    flex: 1, 
-    height: 44, 
-    borderWidth: 1, 
-    borderRadius: borderRadius.md, 
-    paddingHorizontal: spacing.md, 
-    textAlign: 'right' 
+  productName: {
+    fontSize: 16,
+    fontFamily: "Tajawal_700Bold",
+    marginBottom: 4,
+    textAlign: "right",
   },
-  productSelectItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingVertical: spacing.md, 
-    borderBottomWidth: 1, 
-    gap: 12 
+  storeName: {
+    fontSize: 12,
+    fontFamily: "Tajawal_500Medium",
+    marginBottom: 8,
+    textAlign: "right",
   },
-  pickerImg: { width: 40, height: 40, borderRadius: 8 },
-  categoryText: { ...typography.caption },
-  phoneLine: { 
-    marginTop: spacing.xs, 
-    paddingHorizontal: spacing.sm, 
-    paddingVertical: 4, 
-    borderRadius: 6,
-    alignSelf: 'flex-start'
+  stockInfo: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
   },
-  phoneText: { fontSize: 10, fontFamily: 'Tajawal_500Medium' },
+  quantityLabel: {
+    fontSize: 13,
+    fontFamily: "Tajawal_500Medium",
+  },
+  quantityValue: {
+    fontSize: 16,
+    fontFamily: "Tajawal_800ExtraBold",
+  },
+  divider: {
+    height: 1,
+    width: "100%",
+  },
+  actions: {
+    flexDirection: "row",
+    padding: spacing.sm,
+    gap: 8,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 40,
+    borderRadius: 10,
+    gap: 6,
+  },
+  actionBtnText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_700Bold",
+  },
+  modalContent: {
+    paddingBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontFamily: "Tajawal_700Bold",
+    marginBottom: 8,
+    textAlign: "right",
+  },
+  footerSpacer: {
+    height: 100,
+  },
 });

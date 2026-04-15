@@ -27,7 +27,6 @@ module.exports = ({ config: defaultConfig }) => ({
   orientation: 'portrait',
   icon: `${assetsDir}/icon.png`,
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
   scheme: customerConfig.slug,
   splash: {
     image: `${assetsDir}/splash.png`,
@@ -43,7 +42,6 @@ module.exports = ({ config: defaultConfig }) => ({
       foregroundImage: `${assetsDir}/adaptive-icon.png`,
       backgroundColor: customerConfig.theme.splashBackground || '#0A0A1A',
     },
-    edgeToEdgeEnabled: true,
     package: customerConfig.packageName,
   },
   web: {
@@ -51,6 +49,16 @@ module.exports = ({ config: defaultConfig }) => ({
   },
   plugins: [
     'expo-router',
+    [
+      'expo-build-properties',
+      {
+        android: {
+          enableProguardInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+          buildArchs: ['arm64-v8a', 'armeabi-v7a'],
+        },
+      },
+    ],
     'expo-secure-store',
     [
       'expo-image-picker',

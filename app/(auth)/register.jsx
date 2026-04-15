@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,19 +8,27 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
-} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../src/stores/useAuthStore';
-import { useTheme } from '../../src/hooks/useTheme';
-import Button from '../../src/components/ui/Button';
-import Input from '../../src/components/ui/Input';
-import { typography, spacing, borderRadius, gradients } from '../../src/theme/theme';
-import { ROLES } from '../../src/lib/constants';
-import { SELF_REGISTRATION_ROLES, navigateToRoleHome } from '../../src/lib/roleRouter';
-import { useResponsive } from '../../src/hooks/useResponsive';
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "../../src/stores/useAuthStore";
+import { useTheme } from "../../src/hooks/useTheme";
+import Button from "../../src/components/ui/Button";
+import Input from "../../src/components/ui/Input";
+import {
+  typography,
+  spacing,
+  borderRadius,
+  gradients,
+} from "../../src/theme/theme";
+import { ROLES } from "../../src/lib/constants";
+import {
+  SELF_REGISTRATION_ROLES,
+  navigateToRoleHome,
+} from "../../src/lib/roleRouter";
+import { useResponsive } from "../../src/hooks/useResponsive";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -29,11 +37,11 @@ export default function RegisterScreen() {
   const signUp = useAuthStore((s) => s.signUp);
   const isLoading = useAuthStore((s) => s.isLoading);
 
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState(ROLES.AFFILIATE);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(30)).current;
@@ -63,19 +71,19 @@ export default function RegisterScreen() {
   }, []);
 
   const handleRegister = async () => {
-    setError('');
+    setError("");
     if (!fullName.trim() || !email.trim() || !password.trim()) {
-      setError('يرجى ملء جميع الحقول');
+      setError("يرجى ملء جميع الحقول");
       return;
     }
     if (password.length < 6) {
-      setError('يجب أن تتكون كلمة المرور من 6 أحرف على الأقل');
+      setError("يجب أن تتكون كلمة المرور من 6 أحرف على الأقل");
       return;
     }
 
     // SEC-1: Validate role against allowlist before sending to server
     if (!SELF_REGISTRATION_ROLES.includes(role)) {
-      setError('نوع الحساب غير مسموح به');
+      setError("نوع الحساب غير مسموح به");
       return;
     }
 
@@ -86,13 +94,13 @@ export default function RegisterScreen() {
     }
 
     if (result.requiresVerification) {
-      router.replace('/(auth)/login');
+      router.replace("/(auth)/login");
       return;
     }
 
     const profile = useAuthStore.getState().profile;
     if (role === ROLES.MERCHANT && profile?.onboarding_completed === false) {
-      router.replace('/(merchant)/onboarding');
+      router.replace("/(merchant)/onboarding");
     } else {
       navigateToRoleHome(router, profile || { role });
     }
@@ -128,7 +136,7 @@ export default function RegisterScreen() {
             styles.roleOption,
             {
               backgroundColor: isSelected
-                ? theme.primary + '10'
+                ? theme.primary + "10"
                 : theme.colors.surfaceElevated,
               borderColor: isSelected ? theme.primary : theme.colors.border,
             },
@@ -137,8 +145,11 @@ export default function RegisterScreen() {
           <LinearGradient
             colors={
               isSelected
-                ? [theme.primary + '30', theme.primary + '10']
-                : [theme.colors.surface2 || theme.colors.borderLight, theme.colors.borderLight]
+                ? [theme.primary + "30", theme.primary + "10"]
+                : [
+                    theme.colors.surface2 || theme.colors.borderLight,
+                    theme.colors.borderLight,
+                  ]
             }
             style={styles.roleIcon}
             start={{ x: 0, y: 0 }}
@@ -172,7 +183,7 @@ export default function RegisterScreen() {
               styles.radio,
               {
                 borderColor: isSelected ? theme.primary : theme.colors.border,
-                backgroundColor: isSelected ? theme.primary : 'transparent',
+                backgroundColor: isSelected ? theme.primary : "transparent",
               },
             ]}
           >
@@ -190,8 +201,8 @@ export default function RegisterScreen() {
       <LinearGradient
         colors={
           theme.isDark
-            ? ['#1A1040', '#0A0A1A', '#0A0A1A']
-            : ['#E8E5FF', '#F5F6FA', '#F5F6FA']
+            ? ["#1A1040", "#0A0A1A", "#0A0A1A"]
+            : ["#E8E5FF", "#F5F6FA", "#F5F6FA"]
         }
         style={styles.topGradient}
         start={{ x: 0.5, y: 0 }}
@@ -200,7 +211,7 @@ export default function RegisterScreen() {
 
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.flex}
         >
           <ScrollView
@@ -209,9 +220,7 @@ export default function RegisterScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Header */}
-            <Animated.View
-              style={[styles.header, { opacity: headerAnim }]}
-            >
+            <Animated.View style={[styles.header, { opacity: headerAnim }]}>
               <Text style={[styles.title, { color: theme.colors.text }]}>
                 إنشاء حساب
               </Text>
@@ -252,11 +261,11 @@ export default function RegisterScreen() {
                 styles.formCard,
                 {
                   backgroundColor: theme.isDark
-                    ? 'rgba(19, 19, 43, 0.6)'
-                    : 'rgba(255, 255, 255, 0.8)',
+                    ? "rgba(19, 19, 43, 0.6)"
+                    : "rgba(255, 255, 255, 0.8)",
                   borderColor: theme.isDark
-                    ? 'rgba(255, 255, 255, 0.06)'
-                    : 'rgba(0, 0, 0, 0.04)',
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : "rgba(0, 0, 0, 0.04)",
                   opacity: formOpacity,
                   transform: [{ translateY: formAnim }],
                 },
@@ -302,15 +311,16 @@ export default function RegisterScreen() {
             </Animated.View>
 
             {/* Footer */}
-            <Animated.View
-              style={[styles.footer, { opacity: formOpacity }]}
-            >
+            <Animated.View style={[styles.footer, { opacity: formOpacity }]}>
               <Text
-                style={[styles.footerText, { color: theme.colors.textSecondary }]}
+                style={[
+                  styles.footerText,
+                  { color: theme.colors.textSecondary },
+                ]}
               >
-                لديك حساب بالفعل؟{' '}
+                لديك حساب بالفعل؟{" "}
               </Text>
-              <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+              <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
                 <Text style={[styles.link, { color: theme.primary }]}>
                   تسجيل الدخول
                 </Text>
@@ -326,7 +336,7 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   topGradient: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -340,8 +350,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
   },
   scrollWide: {
-    alignSelf: 'center',
-    width: '100%',
+    alignSelf: "center",
+    width: "100%",
     maxWidth: 480,
   },
   header: {
@@ -359,8 +369,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   roleOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
@@ -369,8 +379,8 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginEnd: spacing.md,
   },
   roleInfo: {
@@ -388,8 +398,8 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   formCard: {
     borderRadius: borderRadius.xl,
@@ -398,25 +408,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   errorContainer: {
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: "rgba(255, 107, 107, 0.1)",
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 107, 107, 0.2)',
+    borderColor: "rgba(255, 107, 107, 0.2)",
     padding: spacing.md,
     marginBottom: spacing.md,
   },
   errorText: {
-    color: '#FF6B6B',
+    color: "#FF6B6B",
     ...typography.caption,
-    textAlign: 'center',
+    textAlign: "center",
   },
   button: {
     marginTop: spacing.sm,
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
     paddingBottom: spacing.lg,
   },
   footerText: { ...typography.body },

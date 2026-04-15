@@ -60,6 +60,9 @@ export default function RegionalManagerOrders() {
   const [rejectOrderId, setRejectOrderId] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   
+  // Track currently processing order for loading states
+  const [processingOrderId, setProcessingOrderId] = useState(null);
+  
   const [returnModalVisible, setReturnModalVisible] = useState(false);
   const [returnOrderId, setReturnOrderId] = useState(null);
   const [returnReason, setReturnReason] = useState('');
@@ -95,6 +98,7 @@ export default function RegionalManagerOrders() {
       cancelText: 'تراجع',
       type: 'success',
       onConfirm: async () => {
+        setProcessingOrderId(order.id);
         const res = await confirmOrder(order.id, profile.id, order.wilaya_id, order.store_id, order);
         if (res.success) {
           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -103,6 +107,7 @@ export default function RegionalManagerOrders() {
         } else {
           showAlert({ title: 'خطأ', message: res.error, type: 'error' });
         }
+        setProcessingOrderId(null);
       }
     });
   };
@@ -115,6 +120,7 @@ export default function RegionalManagerOrders() {
       cancelText: 'إلغاء',
       type: 'info',
       onConfirm: async () => {
+        setProcessingOrderId(order.id);
         const res = await fulfillFromStock(order.id, profile.id);
         if (res.success) {
           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -123,11 +129,13 @@ export default function RegionalManagerOrders() {
         } else {
           showAlert({ title: 'خطأ', message: res.error, type: 'error' });
         }
+        setProcessingOrderId(null);
       }
     });
   };
 
   const handleStatusAdvance = async (orderId, nextStatus, successMessage) => {
+    setProcessingOrderId(orderId);
     const res = await updateOrderLifecycleStatus(orderId, nextStatus);
     if (res.success) {
       if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -136,6 +144,7 @@ export default function RegionalManagerOrders() {
     } else {
       showAlert({ title: 'خطأ', message: res.error, type: 'error' });
     }
+    setProcessingOrderId(null);
   };
 
   // The New "Undo / Step Back" Function
@@ -152,6 +161,7 @@ export default function RegionalManagerOrders() {
       cancelText: 'إلغاء',
       type: 'warning',
       onConfirm: async () => {
+        setProcessingOrderId(order.id);
         const res = await updateOrderLifecycleStatus(order.id, prevStatus, 'تراجع المشرف للحالة السابقة');
         if (res.success) {
           if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -160,11 +170,13 @@ export default function RegionalManagerOrders() {
         } else {
           showAlert({ title: 'خطأ', message: res.error, type: 'error' });
         }
+        setProcessingOrderId(null);
       }
     });
   };
 
   const handleRejectOrReturn = async (orderId, type, reason) => {
+    setProcessingOrderId(orderId);
     const nextStatus = type === 'cancel' ? 'cancelled' : 'returned';
     const res = await updateOrderLifecycleStatus(orderId, nextStatus, reason);
     if (res.success) {
@@ -178,6 +190,7 @@ export default function RegionalManagerOrders() {
     } else {
       showAlert({ title: 'خطأ', message: res.error, type: 'error' });
     }
+    setProcessingOrderId(null);
   };
 
   const renderOrder = ({ item: order }) => {
@@ -262,13 +275,29 @@ export default function RegionalManagerOrders() {
                   {isNew && (
                     <View style={{ gap: spacing.sm }}>
                       {canFastTrack && (
-                        <TouchableOpacity style={[styles.fastTrackBtn, { backgroundColor: theme.primary }]} onPress={() => handleFastTrack(order)}>
-                          <Ionicons name="flash" size={16} color="#FFF" />
-                          <Text style={styles.fastTrackText}>شحن فوري من المستودع 🚀</Text>
+                        <TouchableOpacity 
+                          style={[styles.fastTrackBtn, { backgroundColor: theme.primary, opacity: processingOrderId === order.id ? 0.7 : 1 }]} 
+                          onPress={() => handleFastTrack(order)}
+                          disabled={processingOrderId === order.id}
+                        >
+                          {processingOrderId === order.id ? (
+                            <LoadingSpinner size="small" color="#FFF" />
+                          ) : (
+                            <>
+                              <Ionicons name="flash" size={16} color="#FFF" />
+                              <Text style={styles.fastTrackText}>شحن فوري من المستودع 🚀</Text>
+                            </>
+                          )}
                         </TouchableOpacity>
                       )}
                       <View style={styles.actionButtonsRow}>
-                        <Button title="تأكيد الطلب ✓" variant="outline" style={{ flex: 1 }} onPress={() => handleConfirmOrder(order)} />
+                        <Button 
+                          title="تأكيد الطلب ✓" 
+                          variant="outline" 
+                          style={{ flex: 1 }} 
+                          onPress={() => handleConfirmOrder(order)} 
+                          loading={processingOrderId === order.id} 
+                        />
                         <TouchableOpacity 
                           style={[styles.outlineActionIcon, { borderColor: theme.colors.error }]} 
                           onPress={() => { setRejectOrderId(order.id); setRejectModalVisible(true); }}
@@ -284,6 +313,7 @@ export default function RegionalManagerOrders() {
                       title="بدء التوصيل 🚚" 
                       variant="primary" 
                       onPress={() => handleStatusAdvance(order.id, 'in_transit', 'تم تحويل الطلب إلى قيد التوصيل')} 
+                      loading={processingOrderId === order.id} 
                     />
                   )}
 
@@ -294,6 +324,7 @@ export default function RegionalManagerOrders() {
                         variant="gradient" 
                         style={{ flex: 1 }} 
                         onPress={() => handleStatusAdvance(order.id, 'delivered', 'تم تسجيل الطلب كمسلّم')} 
+                        loading={processingOrderId === order.id} 
                       />
                       <TouchableOpacity 
                         style={[styles.outlineActionBtn, { borderColor: '#E17055' }]} 
@@ -309,7 +340,7 @@ export default function RegionalManagerOrders() {
                     <TouchableOpacity
                       style={[styles.copyLinkBtn, { borderColor: theme.colors.border }]}
                       onPress={() => {
-                        Clipboard.setString(`https://codfilate.com/track/${order.id}`);
+                        Clipboard.setString(`https://codfilatepromo.web.app/track/${order.id}`);
                         showAlert({ title: 'تم', message: 'تم نسخ رابط التتبع بنجاح', type: 'success' });
                       }}
                     >
@@ -320,11 +351,18 @@ export default function RegionalManagerOrders() {
                     {/* Step Back / Revert Button */}
                     {prevStatus && (
                       <TouchableOpacity
-                        style={[styles.revertBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
+                        style={[styles.revertBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, opacity: processingOrderId === order.id ? 0.7 : 1 }]}
                         onPress={() => handleRevertStatus(order)}
+                        disabled={processingOrderId === order.id}
                       >
-                        <Ionicons name="arrow-undo-outline" size={14} color={theme.colors.textSecondary} />
-                        <Text style={[styles.secondaryBtnText, { color: theme.colors.textSecondary }]}>تراجع للحالة السابقة</Text>
+                        {processingOrderId === order.id ? (
+                          <LoadingSpinner size="small" color={theme.colors.textSecondary} />
+                        ) : (
+                          <>
+                            <Ionicons name="arrow-undo-outline" size={14} color={theme.colors.textSecondary} />
+                            <Text style={[styles.secondaryBtnText, { color: theme.colors.textSecondary }]}>تراجع للحالة السابقة</Text>
+                          </>
+                        )}
                       </TouchableOpacity>
                     )}
                   </View>
@@ -381,6 +419,7 @@ export default function RegionalManagerOrders() {
           <Button 
             title="تأكيد الإلغاء نهائياً" 
             variant="destructive" 
+            loading={processingOrderId === rejectOrderId}
             onPress={() => {
               if(!rejectReason.trim()) return showAlert({ title: 'تنبيه', message: 'يرجى كتابة سبب الإلغاء', type: 'error' });
               showConfirm({
@@ -410,6 +449,7 @@ export default function RegionalManagerOrders() {
           <Button 
             title="تأكيد المرتجع" 
             variant="primary" 
+            loading={processingOrderId === returnOrderId}
             onPress={() => {
               showConfirm({
                 title: 'تأكيد المرتجع',

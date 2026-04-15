@@ -92,6 +92,27 @@ export default function ProfileScreen() {
     }
   }, [isEditing, isWebModal]);
 
+  // Web Browser Back Button Handler
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isEditing || typeof window === 'undefined') return;
+
+    window.history.pushState({ customModalOpen: true }, '');
+
+    const onPopState = () => {
+      closeModal();
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (window.history.state?.customModalOpen) {
+        window.history.back();
+      }
+    };
+  }, [isEditing]);
+
+
   const openModal = () => setIsEditing(true);
 
   const closeModal = () => {
@@ -250,7 +271,7 @@ export default function ProfileScreen() {
   const renderWebOverlay = () => {
     if (!isWebModal || !isEditing) return null;
     return (
-      <Modal transparent visible={isEditing} animationType="none">
+      <Modal transparent visible={isEditing} animationType="none" onRequestClose={closeModal}>
         <Animated.View style={[styles.webModalOverlay, { opacity: fadeAnim }]}>
           <View style={[styles.webModalContainer, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.webModalHeaderRow}>

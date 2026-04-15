@@ -152,7 +152,7 @@ export default function UniversalHeader({
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
     ...Platform.select({
       ios: { shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 },
       android: { elevation: 8 },
@@ -161,13 +161,13 @@ const styles = StyleSheet.create({
   },
   safeArea: {},
   inner: {
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   contentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 54,
+    height: 44,
   },
   identityGroup: {
     flexDirection: 'row',
@@ -175,9 +175,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   avatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -226,9 +226,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   h1: {
-    ...typography.h2,
-    fontSize: 22,
-    letterSpacing: -0.5,
+    ...typography.h3,
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
   hSub: {
     ...typography.caption,

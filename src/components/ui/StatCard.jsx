@@ -2,12 +2,11 @@ import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
-import Card from './Card';
-import { spacing, typography, animation, borderRadius as themeRadius } from '../../theme/theme';
+import { spacing, typography } from '../../theme/theme';
 
 /**
- * Premium StatCard component.
- * Features: Solid background icon container, subtle animations, clear typography.
+ * Compact StatCard — horizontal layout for mobile.
+ * Icon on left, value + title stacked on right.
  */
 export default function StatCard({
   title,
@@ -21,9 +20,8 @@ export default function StatCard({
   animate = true,
 }) {
   const theme = useTheme();
-  const scaleIn = useRef(new Animated.Value(animate ? 0.95 : 1)).current;
+  const scaleIn = useRef(new Animated.Value(animate ? 0.97 : 1)).current;
   const opacityIn = useRef(new Animated.Value(animate ? 0 : 1)).current;
-  const pressScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (animate) {
@@ -45,155 +43,149 @@ export default function StatCard({
 
   const accentColor = color || theme.primary;
 
-  const handlePressIn = () => {
-    Animated.spring(pressScale, {
-      toValue: 0.97,
-      friction: 6,
-      tension: 100,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(pressScale, {
-      toValue: 1,
-      friction: 6,
-      tension: 100,
-      useNativeDriver: true,
-    }).start();
-  };
-
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={[{ flex: 1, minWidth: 150 }, style]}
+    <Animated.View
+      style={[
+        styles.wrapper,
+        animate && {
+          opacity: opacityIn,
+          transform: [{ scale: scaleIn }],
+        },
+        style,
+      ]}
     >
-      <Animated.View
+      <View
         style={[
-          styles.animWrapper,
+          styles.card,
           {
-            opacity: opacityIn,
-            transform: [{ scale: scaleIn }, { scale: pressScale }],
+            backgroundColor: theme.isDark ? theme.colors.surface : '#FFFFFF',
+            borderColor: theme.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
           },
-          style,
         ]}
       >
-        <Card style={styles.card} elevated={false}>
-          <View style={styles.header}>
-            <View style={[styles.iconContainer, { backgroundColor: accentColor + '15' }]}>
-              <Ionicons
-                name={icon || 'stats-chart'}
-                size={20}
-                color={accentColor}
-              />
-            </View>
+        {/* Horizontal layout: icon | text block */}
+        <View style={styles.row}>
+          <View style={[styles.iconBox, { backgroundColor: accentColor + '12' }]}>
+            <Ionicons
+              name={icon || 'stats-chart'}
+              size={18}
+              color={accentColor}
+            />
           </View>
-
-          <View style={styles.valueRow}>
-            <Text
-              style={[styles.value, { color: theme.colors.text }]}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              {value}
-            </Text>
-            {trend !== undefined && (
-              <View
-                style={[
-                  styles.trendContainer,
-                  {
-                    backgroundColor: trendUp
-                      ? 'rgba(0, 184, 148, 0.12)'
-                      : 'rgba(255, 107, 107, 0.12)',
-                  },
-                ]}
+          <View style={styles.textBlock}>
+            <View style={styles.valueRow}>
+              <Text
+                style={[styles.value, { color: theme.colors.text }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
               >
-                <Ionicons
-                  name={trendUp ? 'trending-up' : 'trending-down'}
-                  size={12}
-                  color={trendUp ? '#00B894' : '#FF6B6B'}
-                />
-                <Text
+                {value}
+              </Text>
+              {trend !== undefined && (
+                <View
                   style={[
-                    styles.trendText,
-                    { color: trendUp ? '#00B894' : '#FF6B6B' },
+                    styles.trendBadge,
+                    {
+                      backgroundColor: trendUp
+                        ? 'rgba(0, 184, 148, 0.12)'
+                        : 'rgba(255, 107, 107, 0.12)',
+                    },
                   ]}
                 >
-                  {trend}%
-                </Text>
-              </View>
+                  <Ionicons
+                    name={trendUp ? 'trending-up' : 'trending-down'}
+                    size={10}
+                    color={trendUp ? '#00B894' : '#FF6B6B'}
+                  />
+                  <Text
+                    style={[
+                      styles.trendText,
+                      { color: trendUp ? '#00B894' : '#FF6B6B' },
+                    ]}
+                  >
+                    {trend}%
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text
+              style={[styles.title, { color: theme.colors.textSecondary }]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+            {subtitle && (
+              <Text
+                style={[styles.subtitle, { color: theme.colors.textTertiary }]}
+                numberOfLines={1}
+              >
+                {subtitle}
+              </Text>
             )}
           </View>
-
-          <Text style={[styles.title, { color: theme.colors.textSecondary }]} numberOfLines={1}>
-            {title}
-          </Text>
-
-          {subtitle && (
-            <Text style={[styles.subtitle, { color: theme.colors.textTertiary }]} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          )}
-        </Card>
-      </Animated.View>
-    </Pressable>
+        </View>
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  animWrapper: {
+  wrapper: {
     flex: 1,
-    minWidth: 150,
+    minWidth: 140,
   },
   card: {
-    flex: 1,
-    padding: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 10,
   },
-  header: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    gap: 10,
   },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
+  iconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textBlock: {
+    flex: 1,
     justifyContent: 'center',
   },
   valueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
   },
-  trendContainer: {
+  value: {
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 16,
+    letterSpacing: -0.3,
+  },
+  trendBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
     borderRadius: 20,
   },
   trendText: {
     fontFamily: 'Tajawal_700Bold',
-    fontSize: 11,
-  },
-  value: {
-    fontFamily: 'Tajawal_800ExtraBold',
-    fontSize: 22,
-    letterSpacing: -0.5,
+    fontSize: 9,
   },
   title: {
-    ...typography.small,
     fontFamily: 'Tajawal_700Bold',
+    fontSize: 11,
+    lineHeight: 14,
   },
   subtitle: {
-    ...typography.caption,
-    fontSize: 10,
-    marginTop: 2,
+    fontFamily: 'Tajawal_400Regular',
+    fontSize: 9,
+    lineHeight: 12,
+    marginTop: 1,
   },
 });

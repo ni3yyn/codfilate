@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Device from 'expo-device';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -19,12 +18,23 @@ export function usePushRegistration(userId) {
   const tokenRef = useRef(null);
 
   useEffect(() => {
-    if (!userId || !Device.isDevice || !canUseExpoPush()) return undefined;
+    if (!userId || !canUseExpoPush()) return undefined;
 
     let cancelled = false;
 
     (async () => {
       try {
+        // Lazy-load expo-device to prevent top-level native crash (STB-6)
+        let Device;
+        try {
+          Device = require('expo-device');
+        } catch (e) {
+          console.warn('[Push] expo-device not available in binary');
+          return;
+        }
+
+        if (!Device.isDevice) return;
+
         const Notifications = await import('expo-notifications');
 
         Notifications.setNotificationHandler({

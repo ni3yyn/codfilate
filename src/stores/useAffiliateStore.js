@@ -185,19 +185,29 @@ export const useAffiliateStore = create((set, get) => ({
     }
   },
 
-  // Fetch commissions for an affiliate across all their store profiles
-  fetchCommissions: async (_) => {
+  // Fetch commissions for an affiliate (optionally filtered by store)
+  fetchCommissions: async (storeId = null) => {
     set({ isLoading: true });
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: userAffiliates } = await supabase
+      let query = supabase
         .from('affiliates')
         .select('id')
         .eq('user_id', user.id);
-        
+      
+      if (storeId) {
+        query = query.eq('store_id', storeId);
+      }
+
+      const { data: userAffiliates } = await query;
       const affiliateIds = userAffiliates?.map(a => a.id) || [];
+      
+      if (affiliateIds.length === 0) {
+         set({ commissions: [] });
+         return { success: true, data: [] };
+      }
 
       const { data, error } = await supabase
         .from('commissions')
@@ -343,13 +353,28 @@ export const useAffiliateStore = create((set, get) => ({
       } else if (params?.storeId) {
         query = query.eq('store_id', params.storeId);
       } else {
-        // Default User Global View
+        // Default User Global View (Role-Aware Combined Filter)
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error("Not authenticated");
         
-        const { data: userAffs } = await supabase.from('affiliates').select('id').eq('user_id', user.id);
+        const [{ data: userAffs }, { data: userStores }] = await Promise.all([
+          supabase.from('affiliates').select('id').eq('user_id', user.id),
+          supabase.from('stores').select('id').eq('owner_id', user.id)
+        ]);
+
         const affIds = userAffs?.map(a => a.id) || [];
-        query = query.in('affiliate_id', affIds);
+        const storeIds = userStores?.map(s => s.id) || [];
+
+        // Combined filter ensures both merchant and affiliate payouts show up
+        if (affIds.length > 0 && storeIds.length > 0) {
+          query = query.or(`affiliate_id.in.(${affIds.join(',')}),store_id.in.(${storeIds.join(',')}),requester_user_id.eq.${user.id}`);
+        } else if (affIds.length > 0) {
+          query = query.or(`affiliate_id.in.(${affIds.join(',')}),requester_user_id.eq.${user.id}`);
+        } else if (storeIds.length > 0) {
+          query = query.or(`store_id.in.(${storeIds.join(',')}),requester_user_id.eq.${user.id}`);
+        } else {
+           query = query.eq('requester_user_id', user.id);
+        }
       }
 
       const { data, error } = await query;

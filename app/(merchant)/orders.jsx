@@ -186,7 +186,7 @@ export default function OrdersScreen() {
                     <TouchableOpacity
                         style={[styles.shareBtn, { borderColor: theme.colors.border }]}
                         onPress={() => {
-                            const trackingUrl = `https://codfilate.com/track/${item.id}`;
+                            const trackingUrl = `https://codfilatepromo.web.app/track/${item.id}`;
                             Clipboard.setString(trackingUrl);
                             Alert.alert('تم النسخ', 'تم نسخ رابط التتبع.');
                         }}

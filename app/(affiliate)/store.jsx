@@ -95,7 +95,6 @@ export default function StoreScreen() {
     }
   }, [affiliateProfile?.id, products, fetchActiveCampaignsByProducts]);
 
-  // Handle Web Fade Animation
   useEffect(() => {
     if (isWebModal) {
       Animated.timing(fadeAnim, {
@@ -105,6 +104,26 @@ export default function StoreScreen() {
       }).start();
     }
   }, [sheetVisible, isWebModal]);
+
+  // Web Browser Back Button Handler
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !sheetVisible || typeof window === 'undefined') return;
+
+    window.history.pushState({ customModalOpen: true }, '');
+
+    const onPopState = () => {
+      closeModal();
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (window.history.state?.customModalOpen) {
+        window.history.back();
+      }
+    };
+  }, [sheetVisible]);
 
   const campaignByProductId = useMemo(() => {
     const m = {};
@@ -239,7 +258,7 @@ export default function StoreScreen() {
     if (!selectedProduct || !isWebModal) return null;
 
     return (
-      <Modal transparent visible={sheetVisible} animationType="none">
+      <Modal transparent visible={sheetVisible} animationType="none" onRequestClose={closeModal}>
         <Animated.View style={[styles.webModalOverlay, { opacity: fadeAnim }]}>
           <View style={[styles.webModalContainer, { width: isDesktop ? 950 : 750, backgroundColor: theme.colors.surface }]}>
             
@@ -325,26 +344,31 @@ export default function StoreScreen() {
     if (!selectedProduct || isWebModal) return null;
 
     return (
-      <BottomSheet visible={sheetVisible} onClose={closeModal} title="تفاصيل المنتج">
+      <BottomSheet 
+        visible={sheetVisible} 
+        onClose={closeModal} 
+        title="تفاصيل المنتج"
+        scrollable={false}
+      >
         <View style={[styles.sheetContentWrapper, { maxHeight: isSmallScreen ? height * 0.75 : height * 0.85 }]}>
           <ScrollView style={styles.sheetScrollArea} contentContainerStyle={styles.sheetScrollContent} showsVerticalScrollIndicator={false} bounces={false}>
             
-            <Image source={{ uri: selectedProduct.image_url || PLACEHOLDER_IMAGE }} style={[styles.sheetImage, { borderRadius: borderRadius.lg }]} resizeMode="cover" />
+            <Image source={{ uri: selectedProduct.image_url || PLACEHOLDER_IMAGE }} style={[styles.sheetImage]} resizeMode="cover" />
             
             <View style={styles.sheetTitleRow}>
               <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{selectedProduct.name}</Text>
               {!!campaignByProductId[selectedProduct.id] && (
-                <View style={[styles.sheetCampaignBadge, { borderRadius: borderRadius.md }]}>
+                <View style={[styles.sheetCampaignBadge, { borderRadius: borderRadius.full }]}>
                   <Ionicons name="flash" size={12} color="#FFF" />
                   <Text style={styles.sheetCampaignText}>عرض نشط</Text>
                 </View>
               )}
             </View>
 
-            <View style={[styles.sheetPriceCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: borderRadius.lg }]}>
+            <View style={[styles.sheetPriceCard, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.xl }]}>
               <View style={styles.sheetPriceRow}>
                 <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>سعر المنتج الأساسي:</Text>
-                <Text style={[styles.sheetPriceValue, { color: theme.primary }]}>
+                <Text style={[styles.sheetPriceValue, { color: theme.colors.text }]}>
                   {formatCurrency(selectedProduct.price)}
                 </Text>
               </View>
@@ -368,14 +392,16 @@ export default function StoreScreen() {
               {/* ACTION BUTTONS (Inlined for React Native Stability) */}
               <TouchableOpacity 
                 onPress={() => handleCopy(selectedProduct)} 
-                style={[styles.sheetIconBtn, { backgroundColor: isCopied ? '#00B894' : theme.colors.surface2, borderRadius: borderRadius.lg }]}
+                activeOpacity={0.7}
+                style={[styles.sheetIconBtn, { backgroundColor: isCopied ? '#10B981' : theme.colors.surface2, borderRadius: borderRadius.full }]}
               >
                 <Ionicons name={isCopied ? "checkmark-outline" : "copy-outline"} size={24} color={isCopied ? '#FFF' : theme.colors.text} />
               </TouchableOpacity>
 
               <TouchableOpacity 
                 onPress={() => handleShare(selectedProduct)} 
-                style={[styles.sheetIconBtn, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.lg }]}
+                activeOpacity={0.7}
+                style={[styles.sheetIconBtn, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.full }]}
               >
                 <Ionicons name="share-social-outline" size={24} color={theme.colors.text} />
               </TouchableOpacity>
@@ -429,9 +455,12 @@ export default function StoreScreen() {
         title="سوق المنتجات"
         subtitle="تصفح المنتجات وابدأ التسويق الآن"
         rightAction={
-          <TouchableOpacity onPress={() => router.push('/(affiliate)/campaigns')} style={[styles.campaignBtn, { backgroundColor: theme.primary + '15', borderRadius: borderRadius.md }]}>
-            <Ionicons name="flash" size={16} color={theme.primary} />
-            <Text style={[styles.campaignBtnText, { color: theme.primary }]}>الحملات</Text>
+          <TouchableOpacity 
+            onPress={() => router.push('/(affiliate)/campaigns')} 
+            style={[styles.campaignBtn, { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: borderRadius.md }]}
+          >
+            <Ionicons name="flash" size={16} color="#FFFFFF" />
+            <Text style={[styles.campaignBtnText, { color: '#FFFFFF' }]}>الحملات</Text>
           </TouchableOpacity>
         }
       />
@@ -528,20 +557,20 @@ const styles = StyleSheet.create({
   centerWrapper: { flex: 1, alignItems: 'center' },
   constrainedContent: { flex: 1, width: '100%' },
 
-  campaignBtn: { flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 6 },
-  campaignBtnText: { fontFamily: 'Tajawal_700Bold', fontSize: 12 },
+  campaignBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  campaignBtnText: { fontFamily: 'Tajawal_700Bold', fontSize: 13 },
   
   topControls: { zIndex: 10, paddingVertical: spacing.sm },
-  searchBox: { flexDirection: 'row-reverse', alignItems: 'center', height: 48, borderWidth: 1, paddingHorizontal: 14, marginHorizontal: spacing.md, marginBottom: spacing.sm, gap: 8 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', height: 48, borderWidth: 1, paddingHorizontal: 14, marginHorizontal: spacing.md, marginBottom: spacing.sm, gap: 8 },
   searchInput: { flex: 1, height: '100%', textAlign: 'right', fontFamily: 'Tajawal_500Medium', fontSize: 15 },
   
   filterWrapper: { height: 40 },
-  filterRow: { paddingHorizontal: spacing.md, gap: 8, flexDirection: 'row-reverse' },
-  filterChip: { flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 16, height: 38, borderWidth: 1 },
+  filterRow: { paddingHorizontal: spacing.md, gap: 8, flexDirection: 'row' },
+  filterChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, height: 38, borderWidth: 1 },
   filterChipText: { fontSize: 13, fontFamily: 'Tajawal_700Bold' },
   
   listContainer: { flex: 1 },
-  listContent: { padding: spacing.sm, paddingBottom: 100 },
+  listContent: { padding: spacing.sm, paddingBottom: 200 },
   columnWrapper: { gap: spacing.sm, marginBottom: spacing.sm },
   
   gridCard: { borderRadius: borderRadius.lg, borderWidth: 1, overflow: 'hidden', marginHorizontal: spacing.xs, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 3 },
@@ -551,10 +580,10 @@ const styles = StyleSheet.create({
   
   gridContent: { padding: spacing.sm },
   gridTitle: { ...typography.bodyBold, fontSize: 14, textAlign: 'right', lineHeight: 20, height: 40, marginBottom: spacing.xs },
-  gridPriceRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  gridPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   gridPrice: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 16 },
 
-  infoBox: { flexDirection: 'row-reverse', alignItems: 'center', padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, gap: 8 },
+  infoBox: { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, gap: 8 },
   infoBoxText: { flex: 1, fontFamily: 'Tajawal_500Medium', fontSize: 13, lineHeight: 20, textAlign: 'right' },
 
   // --- WEB OVERLAY (ANIMATED OPACITY) ---
@@ -566,7 +595,7 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
   },
   webModalContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     height: 550,
     maxHeight: '90%',
     borderRadius: borderRadius.xl,
@@ -582,28 +611,28 @@ const styles = StyleSheet.create({
   webModalContentArea: { flex: 1.3, padding: spacing.xl, paddingTop: spacing.xxl, justifyContent: 'space-between' },
   webModalImageArea: { flex: 1, backgroundColor: '#F5F6FA' },
   webModalImage: { width: '100%', height: '100%' },
-  webModalFooter: { flexDirection: 'row-reverse', gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1 },
+  webModalFooter: { flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1 },
 
   // --- MOBILE BOTTOM SHEET ---
-  sheetContentWrapper: { flex: 1, display: 'flex', flexDirection: 'column' },
-  sheetScrollArea: { flex: 1 },
-  sheetScrollContent: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl },
-  sheetImage: { width: '100%', height: 250, marginBottom: spacing.md, backgroundColor: '#F9F9F9' },
-  sheetFooter: { padding: spacing.md, paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md, borderTopWidth: 1, elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: -3 } },
-  sheetFooterInner: { flexDirection: 'row-reverse', gap: spacing.sm, alignItems: 'center' },
+  sheetContentWrapper: { flexShrink: 1, display: 'flex', flexDirection: 'column' },
+  sheetScrollArea: { flexShrink: 1 },
+  sheetScrollContent: { paddingBottom: spacing.xxl },
+  sheetImage: { width: '100%', height: 320, marginBottom: spacing.lg, backgroundColor: '#F1F5F9' },
+  sheetFooter: { padding: spacing.md, paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md, borderTopWidth: 1, backgroundColor: 'transparent' },
+  sheetFooterInner: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   
   // --- SHARED STYLES ---
-  sheetTitleRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
-  sheetTitle: { ...typography.h3, textAlign: 'right', flex: 1, lineHeight: 28 },
-  sheetCampaignBadge: { backgroundColor: '#6C5CE7', flexDirection: 'row-reverse', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, gap: 4, marginStart: 12 },
-  sheetCampaignText: { color: '#FFF', fontSize: 12, fontFamily: 'Tajawal_700Bold' },
-  sheetPriceCard: { padding: spacing.md, borderWidth: 1, marginBottom: spacing.md },
-  sheetPriceRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sheetPriceLabel: { fontFamily: 'Tajawal_700Bold', fontSize: 14 },
-  sheetPriceValue: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 24 },
-  descSection: { marginTop: spacing.xs },
-  descTitle: { ...typography.bodyBold, marginBottom: spacing.xs, textAlign: 'right', fontSize: 16 },
-  descText: { ...typography.body, fontSize: 15, lineHeight: 26, textAlign: 'right' },
+  sheetTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  sheetTitle: { ...typography.h2, textAlign: 'right', flex: 1, lineHeight: 32 },
+  sheetCampaignBadge: { backgroundColor: '#8B5CF6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, gap: 6, marginStart: 12 },
+  sheetCampaignText: { color: '#FFF', fontSize: 13, fontFamily: 'Tajawal_700Bold' },
+  sheetPriceCard: { padding: spacing.lg, marginHorizontal: spacing.lg, marginBottom: spacing.lg, overflow: 'hidden' },
+  sheetPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sheetPriceLabel: { fontFamily: 'Tajawal_700Bold', fontSize: 15 },
+  sheetPriceValue: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 26 },
+  descSection: { marginTop: spacing.sm, paddingHorizontal: spacing.lg },
+  descTitle: { ...typography.bodyBold, marginBottom: spacing.sm, textAlign: 'right', fontSize: 17 },
+  descText: { ...typography.body, fontSize: 15, lineHeight: 26, textAlign: 'right', opacity: 0.8 },
   
   sheetIconBtn: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
   sheetOrderBtn: { flex: 1, height: 56 },

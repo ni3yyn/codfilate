@@ -61,9 +61,11 @@ export default function Card({
           backgroundColor: gradient ? 'transparent' : theme.colors.card,
           borderColor: cardBorder,
           borderWidth: borderVariant === 'thick' ? 2 : 1,
+          ...cardShadow,
+        },
+        animate && {
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
-          ...cardShadow,
         },
         (noPadding || gradient) ? null : styles.padding,
         style,
@@ -95,7 +97,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   padding: {
-    padding: spacing.lg,
+    padding: spacing.md,
   },
   accent: {
     position: 'absolute',

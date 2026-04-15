@@ -8,10 +8,11 @@ import {
   KeyboardAvoidingView, 
   Platform,
   Dimensions,
-  Pressable
+  Pressable,
+  BackHandler
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+
 import { useTheme } from '../../hooks/useTheme';
 import { spacing, typography, borderRadius, shadows } from '../../theme/theme';
 
@@ -31,6 +32,39 @@ export default function Modal({
 }) {
   const theme = useTheme();
 
+  // Explicit Hardware Back Button Handler
+  React.useEffect(() => {
+    if (!visible) return;
+    
+    const onBackPress = () => {
+      if (onClose) onClose();
+      return true; // Prevent default (navigation)
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [visible, onClose]);
+
+  // Web Browser Back Button Handler
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !visible || typeof window === 'undefined') return;
+
+    window.history.pushState({ customModalOpen: true }, '');
+
+    const onPopState = () => {
+      if (onClose) onClose();
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (window.history.state?.customModalOpen) {
+        window.history.back();
+      }
+    };
+  }, [visible, onClose]);
+
   return (
     <RNModal
       visible={visible}
@@ -45,14 +79,14 @@ export default function Modal({
           onPress={onClose}
         >
           {theme.isDark ? (
-            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
           ) : (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]} />
           )}
         </Pressable>
 
         <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[styles.modalWrapper, { maxWidth }]}
         >
           <View style={[
@@ -106,9 +140,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...Platform.select({
-      web: {
-        boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-      },
       default: shadows.lg
     })
   },

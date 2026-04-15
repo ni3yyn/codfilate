@@ -116,7 +116,7 @@ export default function AffiliateOrdersScreen() {
                 <TouchableOpacity
                   style={[styles.copyBtn, { borderColor: theme.colors.border }]}
                   onPress={() => {
-                    Clipboard.setString(`https://codfilate.com/track/${item.id}`);
+                    Clipboard.setString(`https://codfilatepromo.web.app/track/${item.id}`);
                     showAlert({ title: 'تم النسخ', message: 'رابط التتبع جاهز للإرسال للعميل.', type: 'success' });
                   }}
                 >

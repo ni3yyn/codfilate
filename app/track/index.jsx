@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,25 +9,34 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/hooks/useTheme';
-import { typography, spacing, borderRadius, shadows } from '../../src/theme/theme';
-import Button from '../../src/components/ui/Button';
-import Card from '../../src/components/ui/Card';
-import { useAlertStore } from '../../src/stores/useAlertStore';
+} from "react-native";
+import { useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../src/hooks/useTheme";
+import {
+  typography,
+  spacing,
+  borderRadius,
+  shadows,
+} from "../../src/theme/theme";
+import Button from "../../src/components/ui/Button";
+import Card from "../../src/components/ui/Card";
+import { useAlertStore } from "../../src/stores/useAlertStore";
 
 export default function TrackSearch() {
   const theme = useTheme();
   const router = useRouter();
   const { showAlert } = useAlertStore();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleSearch = () => {
     if (!searchTerm.trim()) {
-      showAlert({ title: 'تنبيه', message: 'يرجى إدخال رقم الهاتف أو رقم التتبع.', type: 'warning' });
+      showAlert({
+        title: "تنبيه",
+        message: "يرجى إدخال رقم الهاتف أو رقم التتبع.",
+        type: "warning",
+      });
       return;
     }
     // Navigate to the tracking page with the ID or phone
@@ -35,23 +44,42 @@ export default function TrackSearch() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: theme.colors.background }]}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.header}>
-             <Ionicons name="location-outline" size={48} color={theme.primary} />
-             <Text style={[styles.title, { color: theme.colors.text }]}>تتبع طلبك</Text>
-             <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-               أدخل رقم الهاتف المستخدم في الطلب أو رقم التتبع الخاص بك لمعرفة حالة شحنتك.
-             </Text>
+            <Ionicons name="location-outline" size={48} color={theme.primary} />
+            <Text style={[styles.title, { color: theme.colors.text }]}>
+              تتبع طلبك
+            </Text>
+            <Text
+              style={[styles.subtitle, { color: theme.colors.textSecondary }]}
+            >
+              أدخل رقم الهاتف المستخدم في الطلب أو رقم التتبع الخاص بك لمعرفة
+              حالة شحنتك.
+            </Text>
           </View>
 
           <Card style={styles.searchCard}>
-            <View style={[styles.inputWrapper, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-              <Ionicons name="search" size={20} color={theme.colors.textTertiary} />
+            <View
+              style={[
+                styles.inputWrapper,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="search"
+                size={20}
+                color={theme.colors.textTertiary}
+              />
               <TextInput
                 style={[styles.input, { color: theme.colors.text }]}
                 placeholder="رقم الهاتف أو رقم التتبع..."
@@ -74,19 +102,29 @@ export default function TrackSearch() {
           </Card>
 
           <View style={styles.infoSection}>
-             <View style={styles.infoBox}>
-                <Ionicons name="notifications-outline" size={24} color={theme.primary} />
-                <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                  ستتلقى إشعارات نصية عند تغيير حالة طلبك.
-                </Text>
-             </View>
+            <View style={styles.infoBox}>
+              <Ionicons
+                name="notifications-outline"
+                size={24}
+                color={theme.primary}
+              />
+              <Text
+                style={[styles.infoText, { color: theme.colors.textSecondary }]}
+              >
+                ستتلقى إشعارات نصية عند تغيير حالة طلبك.
+              </Text>
+            </View>
           </View>
 
-          <TouchableOpacity 
-            onPress={() => router.replace('/')}
+          <TouchableOpacity
+            onPress={() => router.replace("/")}
             style={styles.backHome}
           >
-            <Text style={{ color: theme.primary, fontFamily: 'Tajawal_700Bold' }}>العودة للرئيسية</Text>
+            <Text
+              style={{ color: theme.primary, fontFamily: "Tajawal_700Bold" }}
+            >
+              العودة للرئيسية
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -99,13 +137,13 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     padding: spacing.xl,
-    justifyContent: 'center',
+    justifyContent: "center",
     maxWidth: 600,
-    alignSelf: 'center',
-    width: '100%',
+    alignSelf: "center",
+    width: "100%",
   },
   header: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: spacing.xl * 1.5,
   },
   title: {
@@ -113,11 +151,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     marginTop: spacing.md,
     marginBottom: spacing.sm,
-    textAlign: 'center',
+    textAlign: "center",
   },
   subtitle: {
     ...typography.body,
-    textAlign: 'center',
+    textAlign: "center",
     lineHeight: 22,
     opacity: 0.8,
   },
@@ -127,10 +165,10 @@ const styles = StyleSheet.create({
     ...shadows.xl,
   },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'web' ? 14 : 10,
+    paddingVertical: Platform.OS === "web" ? 14 : 10,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     marginBottom: spacing.lg,
@@ -139,10 +177,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     ...typography.body,
-    textAlign: 'right',
+    textAlign: "right",
   },
   button: {
-    width: '100%',
+    width: "100%",
     borderRadius: borderRadius.lg,
   },
   infoSection: {
@@ -150,20 +188,20 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   infoBox: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
+    flexDirection: "row-reverse",
+    alignItems: "center",
     gap: spacing.md,
-    backgroundColor: 'rgba(108, 92, 231, 0.05)',
+    backgroundColor: "rgba(108, 92, 231, 0.05)",
     padding: spacing.md,
     borderRadius: borderRadius.md,
   },
   infoText: {
     ...typography.small,
     flex: 1,
-    textAlign: 'right',
+    textAlign: "right",
   },
   backHome: {
     marginTop: spacing.xl,
-    alignItems: 'center',
-  }
+    alignItems: "center",
+  },
 });

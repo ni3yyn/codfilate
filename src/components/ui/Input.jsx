@@ -129,10 +129,13 @@ const styles = StyleSheet.create({
     ...typography.small,
     fontFamily: 'Tajawal_700Bold',
     marginBottom: 8,
-    marginStart: 4,
+    marginEnd: 4,
+    textAlign: 'right', // Force RTL alignment
+    writingDirection: 'rtl',
+    width: '100%',
   },
   container: {
-    flexDirection: 'row-reverse', // RTL alignment for the input container elements
+    flexDirection: 'row', // RTL alignment natively handled by I18nManager
     alignItems: 'center',
     borderRadius: 12,
     paddingHorizontal: 16,
@@ -141,22 +144,23 @@ const styles = StyleSheet.create({
     }),
   },
   icon: {
-    marginStart: 12,
+    marginEnd: 12,
   },
   input: {
     flex: 1,
     ...typography.body,
     paddingVertical: 14,
     textAlign: 'right', // Force Arabic alignment
+    writingDirection: 'rtl',
   },
   eyeIcon: {
     padding: 8,
   },
   errorContainer: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     marginTop: 6,
-    marginStart: 4,
+    marginEnd: 4,
     gap: 4,
   },
   error: {

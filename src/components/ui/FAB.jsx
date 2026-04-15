@@ -1,145 +1,118 @@
-import React from 'react';
-import { 
-  TouchableOpacity, 
-  Text, 
-  StyleSheet, 
-  Platform, 
-  View 
-} from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { TouchableOpacity, Text, StyleSheet, Platform, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFABStore } from '../../stores/useFABStore';
 import { useTheme } from '../../hooks/useTheme';
-import { spacing, typography, borderRadius, shadows, gradients } from '../../theme/theme';
+import { useResponsive } from '../../hooks/useResponsive';
+import { getBottomTabPadding, DOCK_HEIGHT, FAB_GAP } from '../../lib/layout';
 
 /**
- * Smart FAB Component
- * - Mobile: Circular icon-only button
- * - Web: Pill-shaped button with Icon + Label
+ * UniversalFAB — Rendered once in each role _layout.jsx.
+ * Reads from useFABStore to get the current screen's FAB config.
+ * Positioned absolutely to float above the FloatingTabBar dock.
  */
-export default function FAB({ 
-  icon = 'add', 
-  label = 'إضافة', 
-  onPress, 
-  variant = 'gradient',
-  style,
-  visible = true 
-}) {
+export default function UniversalFAB() {
   const theme = useTheme();
-  
-  if (!visible) return null;
+  const insets = useSafeAreaInsets();
+  const { isWide } = useResponsive();
 
-  const isWeb = Platform.OS === 'web';
+  const icon = useFABStore((s) => s.icon);
+  const label = useFABStore((s) => s.label);
+  const onPress = useFABStore((s) => s.onPress);
+  const visible = useFABStore((s) => s.visible);
 
-  const renderContent = () => (
-    <View style={[styles.content, isWeb && styles.contentWeb]}>
-      <Ionicons name={icon} size={24} color="#FFFFFF" />
-      {isWeb && (
-        <Text style={styles.label}>{label}</Text>
-      )}
-    </View>
-  );
+  // Animate in/out
+  const scaleAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: visible ? 1 : 0,
+      friction: 7,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  }, [visible]);
+
+  // Calculate bottom position — mirrors FloatingTabBar's bottomPad exactly
+  const bottomPosition = React.useMemo(() => {
+    const isWeb = Platform.OS === 'web';
+    
+    if (isWide) {
+      // On wide screens (Desktop), FloatingTabBar is hidden.
+      // Offset from the bottom edge directly.
+      return Math.max(insets.bottom, isWeb ? 32 : 24) + 16;
+    }
+    
+    // On mobile, floating exactly above the navigation dock
+    const basePadding = getBottomTabPadding(insets);
+    return basePadding + DOCK_HEIGHT + FAB_GAP;
+  }, [insets.bottom, isWide]);
+
+  const horizontalStyle = React.useMemo(() => {
+    if (isWide) {
+      return { left: 40, alignItems: 'flex-start' };
+    }
+    return { right: 20, alignItems: 'flex-end' };
+  }, [isWide]);
+
+  if (!onPress) return null;
 
   return (
-    <TouchableOpacity
-      activeOpacity={0.85}
-      onPress={onPress}
+    <Animated.View
       style={[
         styles.container,
-        isWeb ? styles.containerWeb : styles.containerMobile,
-        style
+        horizontalStyle,
+        { bottom: bottomPosition },
+        {
+          opacity: scaleAnim,
+          transform: [{ scale: scaleAnim }],
+        },
       ]}
+      pointerEvents={visible ? 'auto' : 'none'}
     >
-      {variant === 'gradient' ? (
-        <LinearGradient
-          colors={gradients.primary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            styles.gradient, 
-            isWeb ? styles.pillRadius : styles.circleRadius,
-            isWeb && styles.webShadow
-          ]}
-        >
-          {renderContent()}
-        </LinearGradient>
-      ) : (
-        <View style={[
-          styles.solid, 
-          { backgroundColor: theme.primary },
-          isWeb ? styles.pillRadius : styles.circleRadius,
-          isWeb && styles.webShadow
-        ]}>
-          {renderContent()}
-        </View>
-      )}
-    </TouchableOpacity>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.85}
+        style={[
+          styles.fab,
+          {
+            backgroundColor: theme.primary,
+            shadowColor: theme.primary,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={label || 'Action button'}
+      >
+        <Ionicons name={icon || 'add'} size={22} color="#FFFFFF" />
+        {label ? (
+          <Text style={styles.label}>{label}</Text>
+        ) : null}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: spacing.lg,
-    right: spacing.lg,
-    ...shadows.lg,
     zIndex: 999,
   },
-  containerMobile: {
-    width: 56,
-    height: 56,
-  },
-  containerWeb: {
-    height: 50,
-    minWidth: 50,
-    backgroundColor: 'transparent',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-        ':hover': {
-          transform: 'scale(1.05)',
-        }
-      }
-    })
-  },
-  webShadow: {
-    ...Platform.select({
-      web: {
-        boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-      }
-    })
-  },
-  pillRadius: {
-    borderRadius: 25,
-  },
-  circleRadius: {
-    borderRadius: 28,
-  },
-  gradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  solid: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  content: {
+  fab: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  contentWeb: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 28,
     gap: 8,
+    elevation: 12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
   },
   label: {
     color: '#FFFFFF',
     fontFamily: 'Tajawal_700Bold',
     fontSize: 14,
-    marginTop: -2,
-  }
+  },
 });

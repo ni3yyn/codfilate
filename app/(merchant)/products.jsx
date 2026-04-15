@@ -26,7 +26,7 @@ import Button from '../../src/components/ui/Button';
 import Input from '../../src/components/ui/Input';
 import Badge from '../../src/components/ui/Badge';
 import UniversalHeader from '../../src/components/ui/UniversalHeader';
-import FAB from '../../src/components/ui/FAB';
+import { useFAB } from '../../src/hooks/useFAB';
 import BottomSheet from '../../src/components/ui/BottomSheet';
 import Modal from '../../src/components/ui/Modal';
 import EmptyState from '../../src/components/ui/EmptyState';
@@ -59,6 +59,15 @@ export default function ProductsScreen() {
   const [selectedSubcategory, setSelectedSubcategory] = useState(null);
   const [filterCategory, setFilterCategory] = useState(null);
 
+  // Register the FAB for this screen
+  const openAddForm = React.useCallback(() => {
+    setFormMode('add');
+    setEditingProduct(null);
+    setShowForm(true);
+  }, []);
+
+
+
   // Edit mode
   const [editingProduct, setEditingProduct] = useState(null);
   const [editName, setEditName] = useState('');
@@ -80,6 +89,14 @@ export default function ProductsScreen() {
   }, [currentStore]);
 
   useEffect(() => { loadProducts(); }, [currentStore]);
+
+  // Register the FAB for this screen
+  useFAB({
+    icon: 'add',
+    label: 'إضافة منتج',
+    onPress: openAddForm,
+    visible: !showForm && !!currentStore,
+  });
 
   const onRefresh = async () => { setRefreshing(true); await loadProducts(); setRefreshing(false); };
 
@@ -663,15 +680,6 @@ export default function ProductsScreen() {
         )
       )}
 
-      <FAB 
-        label="إضافة منتج" 
-        onPress={() => {
-          setFormMode('add');
-          setEditingProduct(null);
-          setShowForm(true);
-        }} 
-        visible={!showForm && !!currentStore}
-      />
     </SafeAreaView>
   );
 }

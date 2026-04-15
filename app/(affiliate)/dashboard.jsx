@@ -205,7 +205,7 @@ export default function AffiliateDashboard() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { padding: spacing.md, paddingTop: spacing.xs, paddingBottom: 120 },
+  scroll: { padding: spacing.md, paddingTop: spacing.xs, paddingBottom: 220 },
   codeCard: { marginBottom: spacing.lg },
   codeCardInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   codeLeft: {},

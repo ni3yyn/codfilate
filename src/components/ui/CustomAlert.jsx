@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
@@ -32,8 +34,11 @@ export default function CustomAlert({
   const [fadeAnim] = React.useState(new Animated.Value(0));
   const [slideAnim] = React.useState(new Animated.Value(20));
 
+  const [showModal, setShowModal] = React.useState(visible);
+
   React.useEffect(() => {
     if (visible) {
+      setShowModal(true);
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -46,13 +51,58 @@ export default function CustomAlert({
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      fadeAnim.setValue(0);
-      slideAnim.setValue(20);
+    } else if (showModal) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 20,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setShowModal(false);
+      });
     }
   }, [visible]);
 
-  if (!visible) return null;
+  // Explicit Hardware Back Button Handler
+  React.useEffect(() => {
+    if (!showModal) return;
+    
+    const onBackPress = () => {
+      if (onCancel) onCancel();
+      return true; // Prevent default navigation
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [visible, onCancel]);
+
+  // Web Browser Back Button Handler
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || !showModal || typeof window === 'undefined') return;
+
+    window.history.pushState({ customModalOpen: true }, '');
+
+    const onPopState = () => {
+      if (onCancel) onCancel();
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (window.history.state?.customModalOpen) {
+        window.history.back();
+      }
+    };
+  }, [showModal, onCancel]);
+
+  if (!showModal) return null;
 
   const getIcon = () => {
     switch (type) {
@@ -73,7 +123,7 @@ export default function CustomAlert({
   return (
     <Modal
       transparent
-      visible={visible}
+      visible={showModal}
       animationType="none"
       onRequestClose={onCancel}
     >
@@ -96,12 +146,14 @@ export default function CustomAlert({
           <Text style={[styles.message, { color: theme.colors.textSecondary }]}>{message}</Text>
 
           <View style={styles.footer}>
-            <TouchableOpacity
-              style={[styles.cancelBtn, { borderColor: theme.colors.border }]}
-              onPress={onCancel}
-            >
-              <Text style={[styles.cancelText, { color: theme.colors.textSecondary }]}>{cancelText}</Text>
-            </TouchableOpacity>
+            {!!cancelText && (
+              <TouchableOpacity
+                style={[styles.cancelBtn, { borderColor: theme.colors.border }]}
+                onPress={onCancel}
+              >
+                <Text style={[styles.cancelText, { color: theme.colors.textSecondary }]}>{cancelText}</Text>
+              </TouchableOpacity>
+            )}
 
             <Button
               title={confirmText}

@@ -130,7 +130,7 @@ export default function MerchantDashboard() {
         <Card style={styles.storeCard} accentColor={theme.primary} accentPosition="left">
           <View style={styles.storeRow}>
             <View style={[styles.storeIconBox, { backgroundColor: theme.primary + '15' }]}>
-              <Ionicons name="storefront" size={24} color={theme.primary} />
+              <Ionicons name="storefront" size={20} color={theme.primary} />
             </View>
             <View style={styles.storeMeta}>
               <Text style={[styles.storeName, { color: theme.colors.text }]}>{currentStore?.name || 'متجر غير مسمى'}</Text>
@@ -146,23 +146,23 @@ export default function MerchantDashboard() {
         </Card>
 
         {/* Welcome Tip */}
-        <View style={{ backgroundColor: theme.primary + '10', padding: spacing.md, borderRadius: borderRadius.lg, marginBottom: spacing.md }}>
-           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-             <Ionicons name="bulb" size={20} color={theme.primary} style={{ marginEnd: 8 }} />
-             <Text style={{ fontFamily: 'Tajawal_700Bold', color: theme.primary }}>نصيحة للتجار 💡</Text>
+        <View style={{ backgroundColor: theme.primary + '08', padding: spacing.sm + 2, borderRadius: 12, marginBottom: spacing.sm }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Ionicons name="bulb" size={16} color={theme.primary} style={{ marginEnd: 6 }} />
+              <Text style={{ fontFamily: 'Tajawal_700Bold', fontSize: 13, color: theme.primary }}>نصيحة للتجار</Text>
            </View>
-           <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
-             هل تعلم؟ المنتجات التي تحتوي على صور وفيديو احترافي تحصل على تفاعل أكبر بـ 5 أضعاف من المسوقين. تأكد من توفير وصف دقيق للمنتج.
+           <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+             المنتجات بصور وفيديو احترافي تحصل على 5x تفاعل. وفّر وصفاً دقيقاً.
            </Text>
         </View>
 
-        <View style={{ backgroundColor: '#00CEC910', padding: spacing.md, borderRadius: borderRadius.lg, marginBottom: spacing.md }}>
-           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-             <Ionicons name="swap-horizontal" size={20} color="#00CEC9" style={{ marginEnd: 8 }} />
-             <Text style={{ fontFamily: 'Tajawal_700Bold', color: '#00CEC9' }}>نظام العمل واللوجستيك 📦</Text>
+        <View style={{ backgroundColor: '#00CEC908', padding: spacing.sm + 2, borderRadius: 12, marginBottom: spacing.sm }}>
+           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+             <Ionicons name="swap-horizontal" size={16} color="#00CEC9" style={{ marginEnd: 6 }} />
+              <Text style={{ fontFamily: 'Tajawal_700Bold', fontSize: 13, color: '#00CEC9' }}>نظام العمل واللوجستيك</Text>
            </View>
-           <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
-             أنت تضع المنتجات، والمدير الإقليمي هو من يتكفل بشحن الطلبيات وتسوية المستحقات المالية. دورك هو الحفاظ على توفر المخزون وتحديث الكميات فوراً.
+           <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textSecondary, fontSize: 12, lineHeight: 18 }}>
+             المدير الإقليمي يتكفل بالشحن والتسوية. دورك: توفر المخزون وتحديث الكميات.
            </Text>
         </View>
 
@@ -182,7 +182,7 @@ export default function MerchantDashboard() {
         {/* Stock Alerts */}
         {(lowStockProducts.length > 0 || outOfStockProducts.length > 0) && (
           <>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>⚠️ تنبيهات المخزون</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>تنبيهات المخزون</Text>
             {outOfStockProducts.map(p => (
               <Card key={p.id} style={styles.stockAlert} accentColor="#D63031" accentPosition="left">
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -205,7 +205,7 @@ export default function MerchantDashboard() {
         )}
 
         {/* Chart */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>📈 إحصائيات المبيعات</Text>
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>إحصائيات المبيعات</Text>
         <Card style={styles.chartCard}>
           <LineChart data={chartData} height={180} width={300} initialSpacing={20} spacing={45} color={theme.primary} thickness={3} startFillColor={theme.primary} endFillColor={theme.primary + '05'} startOpacity={0.2} endOpacity={0.02} curved isAnimated noOfSections={4} maxValue={maxVal + (maxVal * 0.2)} areaChart yAxisTextStyle={{ color: theme.colors.textTertiary, fontSize: 10 }} xAxisLabelTextStyle={{ color: theme.colors.textTertiary, fontSize: 10 }} />
         </Card>
@@ -250,20 +250,20 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.md, paddingTop: spacing.sm, paddingBottom: spacing.xxl },
   pendingRmBanner: { marginBottom: spacing.md, backgroundColor: '#FFFBEB' },
   bannerRow: { flexDirection: 'row', alignItems: 'center' },
-  storeCard: { marginBottom: spacing.lg },
-  storeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  storeIconBox: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  storeCard: { marginBottom: spacing.sm },
+  storeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  storeIconBox: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   storeMeta: { flex: 1 },
-  storeName: { ...typography.bodyBold, fontSize: 18 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 12, fontFamily: 'Tajawal_500Medium' },
-  settingsBtn: { padding: 8 },
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  sectionTitle: { ...typography.h3, marginBottom: spacing.sm },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.md },
+  storeName: { ...typography.bodyBold, fontSize: 15 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 11, fontFamily: 'Tajawal_500Medium' },
+  settingsBtn: { padding: 6 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.xs },
+  sectionTitle: { ...typography.bodyBold, fontSize: 16, marginBottom: spacing.xs },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.sm },
   viewAll: { ...typography.small, fontFamily: 'Tajawal_700Bold' },
-  chartCard: { paddingVertical: spacing.lg, alignItems: 'center', overflow: 'hidden' },
+  chartCard: { paddingVertical: spacing.md, alignItems: 'center', overflow: 'hidden' },
   orderCard: { marginBottom: spacing.sm },
   orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   orderInfo: { flex: 1 },
@@ -274,5 +274,5 @@ const styles = StyleSheet.create({
   emptyCard: { padding: spacing.xl, alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
   emptyText: { ...typography.body, textAlign: 'center', color: '#94A3B8' },
   stockAlert: { marginBottom: spacing.xs },
-  bottomSpacer: { height: 100 },
+  bottomSpacer: { height: 140 },
 });

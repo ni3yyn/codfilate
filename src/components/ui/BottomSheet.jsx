@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -8,10 +8,13 @@ import {
   ScrollView, 
   KeyboardAvoidingView, 
   Platform,
-  Dimensions
+  Dimensions,
+  Animated,
+  Easing,
+  BackHandler
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+
 import { useTheme } from '../../hooks/useTheme';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing, typography, borderRadius, shadows } from '../../theme/theme';
@@ -20,9 +23,9 @@ const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 /**
  * Premium BottomSheet Component
- * - Pure React Native implementation (Zero Config)
- * - Support for Blur backdrop
- * - Internal ScrollView for long forms
+ * - Pure React Native implementation
+ * - Modern Animation: Fade overlay + Sliding sheet
+ * - Opt-in internal ScrollView (defaults to true)
  */
 export default function BottomSheet({ 
   visible, 
@@ -30,85 +33,185 @@ export default function BottomSheet({
   title, 
   subtitle,
   children,
-  maxHeight
+  maxHeight,
+  scrollable = true,
+  sheetStyle,
+  titleStyle,
+  closeBtnStyle,
+  closeIconColor,
 }) {
   const theme = useTheme();
   const { isWide, height: windowHeight } = useResponsive();
   
+  const [showModal, setShowModal] = useState(visible);
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      setShowModal(true);
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 65,
+          friction: 10,
+          useNativeDriver: true,
+        })
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: SCREEN_HEIGHT,
+          duration: 250,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setShowModal(false);
+      });
+    }
+  }, [visible, fadeAnim, slideAnim]);
+
+  // Explicit Hardware Back Button Handler
+  useEffect(() => {
+    if (!showModal) return;
+    
+    const onBackPress = () => {
+      if (onClose) onClose();
+      return true; // Prevent default (navigation)
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [showModal, onClose]);
+
+  const latestOnClose = useRef(onClose);
+  useEffect(() => {
+    latestOnClose.current = onClose;
+  }, [onClose]);
+
+  // Web Browser Back Button Handler
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showModal || typeof window === 'undefined') return;
+
+    window.history.pushState({ customModalOpen: true }, '');
+
+    const onPopState = () => {
+      if (latestOnClose.current) latestOnClose.current();
+    };
+
+    window.addEventListener('popstate', onPopState);
+
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (window.history.state?.customModalOpen) {
+        window.history.back();
+      }
+    };
+  }, [showModal]);
+
   const finalMaxHeight = maxHeight || windowHeight * 0.85;
   const isCentered = Platform.OS === 'web' && isWide;
 
   return (
     <Modal
-      visible={visible}
+      visible={showModal}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
     >
       <View style={[styles.overlay, isCentered && styles.overlayCentered]}>
-        {/* Backdrop - Click to close */}
+        
+        {/* Backdrop Overlay - Click to close */}
         <TouchableOpacity 
           activeOpacity={1} 
           style={styles.backdrop} 
           onPress={onClose}
         >
-          {theme.isDark ? (
-            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.45)' }]} />
-          )}
+          <Animated.View style={[
+            StyleSheet.absoluteFill, 
+            { 
+              backgroundColor: '#000', 
+              opacity: Animated.multiply(fadeAnim, theme.isDark ? 0.65 : 0.45) 
+            }
+          ]} />
         </TouchableOpacity>
 
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          style={[
-            styles.sheetWrapper, 
-            { maxHeight: finalMaxHeight },
-            isCentered && styles.sheetWrapperCentered
-          ]}
-        >
-          <View style={[
-            styles.sheetContainer, 
-            { backgroundColor: theme.colors.surface },
-            isCentered && styles.sheetContainerCentered
-          ]}>
-            {/* Grabber Handle - Only on Mobile */}
-            {!isCentered && (
-              <View style={styles.handleContainer}>
-                <View style={[styles.handle, { backgroundColor: theme.colors.textTertiary + '40' }]} />
-              </View>
-            )}
+        {/* Sliding Sheet */}
+        <Animated.View style={[
+          styles.animWrapper,
+          { transform: [{ translateY: isCentered ? 0 : slideAnim }] }
+        ]}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            style={[
+              styles.sheetWrapper, 
+              { maxHeight: finalMaxHeight },
+              isCentered && styles.sheetWrapperCentered
+            ]}
+          >
+            <View style={[
+              styles.sheetContainer, 
+              { backgroundColor: theme.colors.surface },
+              sheetStyle,
+              isCentered && styles.sheetContainerCentered
+            ]}>
+              
+              {/* Grabber Handle - Only on Mobile */}
+              {!isCentered && (
+                <View style={styles.handleContainer}>
+                  <View style={[styles.handle, { backgroundColor: theme.colors.textTertiary + '40' }]} />
+                </View>
+              )}
 
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.titleGroup}>
-                <Text style={[styles.title, { color: theme.colors.text }]}>{title}</Text>
-                {subtitle && (
-                  <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
-                    {subtitle}
-                  </Text>
-                )}
+              {/* Header */}
+              <View style={styles.header}>
+                <View style={styles.titleGroup}>
+                  <Text style={[styles.title, { color: theme.colors.text }, titleStyle]}>{title}</Text>
+                  {subtitle && (
+                    <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                      {subtitle}
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity 
+                  onPress={onClose} 
+                  style={[styles.closeBtn, { backgroundColor: theme.colors.surface2 }, closeBtnStyle]}
+                >
+                  <Ionicons name="close" size={20} color={closeIconColor || theme.colors.text} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity 
-                onPress={onClose} 
-                style={[styles.closeBtn, { backgroundColor: theme.colors.surface2 }]}
-              >
-                <Ionicons name="close" size={20} color={theme.colors.text} />
-              </TouchableOpacity>
+
+              {/* Content Area */}
+              {scrollable ? (
+                <ScrollView 
+                  showsVerticalScrollIndicator={Platform.OS === 'web'}
+                  contentContainerStyle={styles.content}
+                  style={styles.scrollView}
+                  bounces={false}
+                >
+                  {children}
+                </ScrollView>
+              ) : (
+                <View style={styles.contentNoScroll}>
+                  {children}
+                </View>
+              )}
+
             </View>
-
-            {/* Content Area */}
-            <ScrollView 
-              showsVerticalScrollIndicator={Platform.OS === 'web'}
-              contentContainerStyle={styles.content}
-              style={styles.scrollView}
-              bounces={false}
-            >
-              {children}
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -127,6 +230,10 @@ const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFillObject,
   },
+  animWrapper: {
+    width: '100%',
+    alignItems: 'center',
+  },
   sheetWrapper: {
     width: '100%',
     alignSelf: 'center',
@@ -139,12 +246,10 @@ const styles = StyleSheet.create({
   sheetContainer: {
     borderTopLeftRadius: borderRadius.xl,
     borderTopRightRadius: borderRadius.xl,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 16,
     overflow: 'hidden',
+    flexShrink: 1,
     ...Platform.select({
-      web: {
-        boxShadow: '0 -4px 12px rgba(0,0,0,0.1)',
-      },
       default: shadows.md
     })
   },
@@ -152,11 +257,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     borderBottomLeftRadius: borderRadius.xl,
     borderBottomRightRadius: borderRadius.xl,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
-      }
-    })
   },
   handleContainer: {
     alignItems: 'center',
@@ -183,6 +283,10 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   scrollView: {
+    flexShrink: 1,
+    flexGrow: 0,
+  },
+  contentNoScroll: {
     flexShrink: 1,
   },
   subtitle: {

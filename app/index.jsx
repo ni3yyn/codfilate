@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuthStore } from '../src/stores/useAuthStore';
-import { useTheme } from '../src/hooks/useTheme';
-import { navigateToRoleHome } from '../src/lib/roleRouter';
-import { appConfig } from '../src/lib/appConfig';
-import { typography, spacing } from '../src/theme/theme';
+import React, { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated, Platform } from "react-native";
+import { useRouter } from "expo-router";
+import { useAuthStore } from "../src/stores/useAuthStore";
+import { useTheme } from "../src/hooks/useTheme";
+import { navigateToRoleHome } from "../src/lib/roleRouter";
+import { appConfig } from "../src/lib/appConfig";
+import { typography, spacing } from "../src/theme/theme";
 
 /**
  * Premium Splash Screen.
@@ -16,7 +16,7 @@ export default function Index() {
   const { isLoading, isAuthenticated, profile } = useAuthStore();
   const theme = useTheme();
   const hasNavigated = useRef(false);
-  
+
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
   const dotsAnim = React.useRef(new Animated.Value(0.3)).current;
@@ -50,7 +50,7 @@ export default function Index() {
           duration: 600,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     ).start();
   }, []);
 
@@ -59,7 +59,7 @@ export default function Index() {
 
     if (!isAuthenticated) {
       hasNavigated.current = true;
-      router.replace('/(auth)/login');
+      router.replace("/(auth)/login");
       return;
     }
 
@@ -67,12 +67,14 @@ export default function Index() {
       hasNavigated.current = true;
       navigateToRoleHome(router, profile);
     }
-    // If authenticated but profile is still loading (null), wait — 
+    // If authenticated but profile is still loading (null), wait —
     // don't sign out aggressively, let the auth store finish fetching.
   }, [isLoading, isAuthenticated, profile]);
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
       <Animated.View
         style={[
           styles.content,
@@ -83,7 +85,9 @@ export default function Index() {
         ]}
       >
         {/* Brand Mark */}
-        <View style={[styles.logoContainer, { backgroundColor: theme.primary }]}>
+        <View
+          style={[styles.logoContainer, { backgroundColor: theme.primary }]}
+        >
           <Text style={styles.logoText}>{appConfig.logoInitial}</Text>
         </View>
 
@@ -98,19 +102,11 @@ export default function Index() {
 
         {/* Loading State */}
         <View style={styles.loaderContainer}>
-          <Animated.View
-            style={[
-              styles.loadingDots,
-              { opacity: dotsAnim },
-            ]}
-          >
+          <Animated.View style={[styles.loadingDots, { opacity: dotsAnim }]}>
             {[0, 1, 2].map((i) => (
               <View
                 key={i}
-                style={[
-                  styles.dot,
-                  { backgroundColor: theme.primary },
-                ]}
+                style={[styles.dot, { backgroundColor: theme.primary }]}
               />
             ))}
           </Animated.View>
@@ -123,23 +119,23 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   content: {
-    alignItems: 'center',
-    width: '100%',
+    alignItems: "center",
+    width: "100%",
   },
   logoContainer: {
     width: 100,
     height: 100,
     borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: spacing.xl,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
+        shadowColor: "#000",
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
@@ -148,14 +144,14 @@ const styles = StyleSheet.create({
         elevation: 8,
       },
       web: {
-        boxShadow: '0 8px 24px rgba(45, 106, 79, 0.2)',
-      }
+        boxShadow: "0 8px 24px rgba(45, 106, 79, 0.2)",
+      },
     }),
   },
   logoText: {
     fontSize: 50,
-    fontFamily: 'Tajawal_800ExtraBold',
-    color: '#FFFFFF',
+    fontFamily: "Tajawal_800ExtraBold",
+    color: "#FFFFFF",
   },
   title: {
     ...typography.h1,
@@ -166,17 +162,17 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     fontSize: 16,
-    fontFamily: 'Tajawal_500Medium',
+    fontFamily: "Tajawal_500Medium",
     letterSpacing: 2,
     opacity: 0.8,
   },
   loaderContainer: {
     marginTop: 60,
     height: 20,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   loadingDots: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 8,
   },
   dot: {

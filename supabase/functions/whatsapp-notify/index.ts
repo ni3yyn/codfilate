@@ -51,7 +51,7 @@ serve(async (req) => {
     }
 
     // 4. Resolve Tracking Link
-    const trackingLink = `https://codfilate.com/track/${order_id}`
+    const trackingLink = `https://codfilatepromo.web.app/track/${order_id}`
 
     // 5. Send to Meta WhatsApp API
     const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {

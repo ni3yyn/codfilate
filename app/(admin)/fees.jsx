@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo, memo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, memo } from "react";
 import {
   View,
   Text,
@@ -8,43 +8,54 @@ import {
   RefreshControl,
   TouchableOpacity,
   TextInput,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../../src/hooks/useTheme';
-import { supabase } from '../../src/lib/supabase';
-import Button from '../../src/components/ui/Button';
-import Card from '../../src/components/ui/Card';
-import Input from '../../src/components/ui/Input';
-import UniversalHeader from '../../src/components/ui/UniversalHeader';
-import { typography, spacing, borderRadius } from '../../src/theme/theme';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../src/hooks/useTheme";
+import { supabase } from "../../src/lib/supabase";
+import Button from "../../src/components/ui/Button";
+import Card from "../../src/components/ui/Card";
+import Input from "../../src/components/ui/Input";
+import UniversalHeader from "../../src/components/ui/UniversalHeader";
+import { typography, spacing, borderRadius } from "../../src/theme/theme";
 
 const PLATFORM_FIELDS = [
-  { key: 'platform_fee', label: 'رسوم المنصة', hint: 'لكل طلبية' },
-  { key: 'admin_fee', label: 'الإدارة العليا', hint: 'نموذجي 50 دج' },
-  { key: 'regional_manager_fee', label: 'المدير الإقليمي', hint: 'نموذجي 150 دج' },
-  { key: 'min_payout_amount', label: 'أقل سحب', hint: 'للمسوقين' },
-  { key: 'failed_delivery_compensation', label: 'تعويض فشل التوصيل', hint: 'اختياري' },
+  { key: "platform_fee", label: "رسوم المنصة", hint: "لكل طلبية" },
+  { key: "admin_fee", label: "الإدارة العليا", hint: "نموذجي 50 دج" },
+  {
+    key: "regional_manager_fee",
+    label: "المدير الإقليمي",
+    hint: "نموذجي 150 دج",
+  },
+  { key: "min_payout_amount", label: "أقل سحب", hint: "للمسوقين" },
+  {
+    key: "failed_delivery_compensation",
+    label: "تعويض فشل التوصيل",
+    hint: "اختياري",
+  },
 ];
 
 const MERCHANT_SIGNUP_STEPS = [
-  { icon: 'person-outline', text: 'الاسم الكامل' },
-  { icon: 'mail-outline', text: 'البريد الإلكتروني' },
-  { icon: 'lock-closed-outline', text: 'كلمة المرور (6 أحرف كحد أدنى)' },
-  { icon: 'git-branch-outline', text: 'اختيار الدور: تاجر أو مسوق' },
+  { icon: "person-outline", text: "الاسم الكامل" },
+  { icon: "mail-outline", text: "البريد الإلكتروني" },
+  { icon: "lock-closed-outline", text: "كلمة المرور (6 أحرف كحد أدنى)" },
+  { icon: "git-branch-outline", text: "اختيار الدور: تاجر أو مسوق" },
 ];
 
 const MERCHANT_ONBOARDING = [
-  { icon: 'storefront-outline', text: 'اسم المتجر' },
-  { icon: 'document-text-outline', text: 'وصف قصير (اختياري)' },
-  { icon: 'location-outline', text: 'ولاية النشاط — ثم موافقة المدير الإقليمي' },
+  { icon: "storefront-outline", text: "اسم المتجر" },
+  { icon: "document-text-outline", text: "وصف قصير (اختياري)" },
+  {
+    icon: "location-outline",
+    text: "ولاية النشاط — ثم موافقة المدير الإقليمي",
+  },
 ];
 
 const AFFILIATE_SIGNUP = [
-  { icon: 'person-outline', text: 'الاسم الكامل' },
-  { icon: 'mail-outline', text: 'البريد الإلكتروني' },
-  { icon: 'lock-closed-outline', text: 'كلمة المرور' },
-  { icon: 'megaphone-outline', text: 'دور مسوق — ثم الحملات والطلبات' },
+  { icon: "person-outline", text: "الاسم الكامل" },
+  { icon: "mail-outline", text: "البريد الإلكتروني" },
+  { icon: "lock-closed-outline", text: "كلمة المرور" },
+  { icon: "megaphone-outline", text: "دور مسوق — ثم الحملات والطلبات" },
 ];
 
 function SignupChecklist({ title, icon, items, theme }) {
@@ -52,12 +63,26 @@ function SignupChecklist({ title, icon, items, theme }) {
     <View style={[styles.checkBlock, { borderColor: theme.colors.border }]}>
       <View style={styles.checkTitleRow}>
         <Ionicons name={icon} size={18} color={theme.primary} />
-        <Text style={[typography.bodyBold, { color: theme.colors.text, flex: 1 }]}>{title}</Text>
+        <Text
+          style={[typography.bodyBold, { color: theme.colors.text, flex: 1 }]}
+        >
+          {title}
+        </Text>
       </View>
       {items.map((row, i) => (
         <View key={i} style={styles.checkRow}>
-          <Ionicons name={row.icon} size={14} color={theme.colors.textTertiary} style={{ marginTop: 2 }} />
-          <Text style={[typography.caption, { color: theme.colors.textSecondary, flex: 1, lineHeight: 20 }]}>
+          <Ionicons
+            name={row.icon}
+            size={14}
+            color={theme.colors.textTertiary}
+            style={{ marginTop: 2 }}
+          />
+          <Text
+            style={[
+              typography.caption,
+              { color: theme.colors.textSecondary, flex: 1, lineHeight: 20 },
+            ]}
+          >
             {row.text}
           </Text>
         </View>
@@ -78,19 +103,21 @@ function PlatformFeesEditor({ initial, theme, onSaved }) {
   const save = async () => {
     setSaving(true);
     const { error } = await supabase
-      .from('platform_settings')
+      .from("platform_settings")
       .update({
         platform_fee: Number(draft.platform_fee),
         admin_fee: Number(draft.admin_fee),
         regional_manager_fee: Number(draft.regional_manager_fee),
         min_payout_amount: Number(draft.min_payout_amount),
-        failed_delivery_compensation: Number(draft.failed_delivery_compensation),
+        failed_delivery_compensation: Number(
+          draft.failed_delivery_compensation,
+        ),
       })
-      .eq('id', 1);
+      .eq("id", 1);
     setSaving(false);
-    if (error) Alert.alert('خطأ', error.message);
+    if (error) Alert.alert("خطأ", error.message);
     else {
-      Alert.alert('تم', 'تم حفظ الرسوم العامة');
+      Alert.alert("تم", "تم حفظ الرسوم العامة");
       onSaved?.();
     }
   };
@@ -99,7 +126,12 @@ function PlatformFeesEditor({ initial, theme, onSaved }) {
 
   return (
     <Card style={styles.cardPad}>
-      <Text style={[typography.bodyBold, { color: theme.colors.text, marginBottom: spacing.sm }]}>
+      <Text
+        style={[
+          typography.bodyBold,
+          { color: theme.colors.text, marginBottom: spacing.sm },
+        ]}
+      >
         الرسوم العامة (دج)
       </Text>
       <View style={styles.feeGrid}>
@@ -107,28 +139,40 @@ function PlatformFeesEditor({ initial, theme, onSaved }) {
           <View key={key} style={styles.feeCell}>
             <Input
               label={label}
-              value={String(draft[key] ?? '')}
+              value={String(draft[key] ?? "")}
               onChangeText={(t) => setDraft((d) => ({ ...d, [key]: t }))}
               keyboardType="numeric"
               style={styles.inputTight}
             />
-            <Text style={[typography.small, { color: theme.colors.textTertiary, marginTop: 2 }]}>{hint}</Text>
+            <Text
+              style={[
+                typography.small,
+                { color: theme.colors.textTertiary, marginTop: 2 },
+              ]}
+            >
+              {hint}
+            </Text>
           </View>
         ))}
       </View>
-      <Button title="حفظ الرسوم العامة" onPress={save} loading={saving} variant="gradient" />
+      <Button
+        title="حفظ الرسوم العامة"
+        onPress={save}
+        loading={saving}
+        variant="gradient"
+      />
     </Card>
   );
 }
 
 const WilayaFeeRow = memo(function WilayaFeeRow({ w, theme, onSave }) {
-  const [home, setHome] = useState(String(w.home_delivery_fee ?? ''));
-  const [office, setOffice] = useState(String(w.office_delivery_fee ?? ''));
+  const [home, setHome] = useState(String(w.home_delivery_fee ?? ""));
+  const [office, setOffice] = useState(String(w.office_delivery_fee ?? ""));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setHome(String(w.home_delivery_fee ?? ''));
-    setOffice(String(w.office_delivery_fee ?? ''));
+    setHome(String(w.home_delivery_fee ?? ""));
+    setOffice(String(w.office_delivery_fee ?? ""));
   }, [w.home_delivery_fee, w.office_delivery_fee]);
 
   const save = async () => {
@@ -138,10 +182,23 @@ const WilayaFeeRow = memo(function WilayaFeeRow({ w, theme, onSave }) {
   };
 
   return (
-    <View style={[styles.wilayaRow, { borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceElevated }]}>
+    <View
+      style={[
+        styles.wilayaRow,
+        {
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surfaceElevated,
+        },
+      ]}
+    >
       <View style={styles.wilayaMeta}>
-        <Text style={[styles.wilayaCode, { color: theme.colors.textTertiary }]}>{w.code}</Text>
-        <Text style={[styles.wilayaName, { color: theme.colors.text }]} numberOfLines={1}>
+        <Text style={[styles.wilayaCode, { color: theme.colors.textTertiary }]}>
+          {w.code}
+        </Text>
+        <Text
+          style={[styles.wilayaName, { color: theme.colors.text }]}
+          numberOfLines={1}
+        >
           {w.name}
         </Text>
       </View>
@@ -152,7 +209,10 @@ const WilayaFeeRow = memo(function WilayaFeeRow({ w, theme, onSave }) {
           keyboardType="numeric"
           placeholder="منزل"
           placeholderTextColor={theme.colors.textTertiary}
-          style={[styles.miniInp, { color: theme.colors.text, borderColor: theme.colors.border }]}
+          style={[
+            styles.miniInp,
+            { color: theme.colors.text, borderColor: theme.colors.border },
+          ]}
         />
         <TextInput
           value={office}
@@ -160,15 +220,22 @@ const WilayaFeeRow = memo(function WilayaFeeRow({ w, theme, onSave }) {
           keyboardType="numeric"
           placeholder="مكتب"
           placeholderTextColor={theme.colors.textTertiary}
-          style={[styles.miniInp, { color: theme.colors.text, borderColor: theme.colors.border }]}
+          style={[
+            styles.miniInp,
+            { color: theme.colors.text, borderColor: theme.colors.border },
+          ]}
         />
         <TouchableOpacity
           onPress={save}
           disabled={saving}
-          style={[styles.saveIcon, { backgroundColor: theme.primary + '22' }]}
+          style={[styles.saveIcon, { backgroundColor: theme.primary + "22" }]}
           hitSlop={8}
         >
-          <Ionicons name={saving ? 'hourglass-outline' : 'checkmark'} size={20} color={theme.primary} />
+          <Ionicons
+            name={saving ? "hourglass-outline" : "checkmark"}
+            size={20}
+            color={theme.primary}
+          />
         </TouchableOpacity>
       </View>
     </View>
@@ -180,14 +247,14 @@ export default function AdminFeesScreen() {
   const [settings, setSettings] = useState(null);
   const [wilayas, setWilayas] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [wilayaSearch, setWilayaSearch] = useState('');
+  const [wilayaSearch, setWilayaSearch] = useState("");
   const [showWilayaSection, setShowWilayaSection] = useState(true);
   const [showSignupRef, setShowSignupRef] = useState(true);
 
   const load = useCallback(async () => {
     const [sRes, wRes] = await Promise.all([
-      supabase.from('platform_settings').select('*').eq('id', 1).maybeSingle(),
-      supabase.from('wilayas').select('*').order('code'),
+      supabase.from("platform_settings").select("*").eq("id", 1).maybeSingle(),
+      supabase.from("wilayas").select("*").order("code"),
     ]);
     if (sRes.data) setSettings(sRes.data);
     if (wRes.data) setWilayas(wRes.data);
@@ -199,14 +266,14 @@ export default function AdminFeesScreen() {
 
   const updateWilayaFees = useCallback(async (id, home, office) => {
     const { error } = await supabase
-      .from('wilayas')
+      .from("wilayas")
       .update({
         home_delivery_fee: parseInt(home, 10) || 0,
         office_delivery_fee: parseInt(office, 10) || 0,
       })
-      .eq('id', id);
+      .eq("id", id);
     if (error) {
-      Alert.alert('خطأ', error.message);
+      Alert.alert("خطأ", error.message);
       return;
     }
     setWilayas((prev) =>
@@ -217,8 +284,8 @@ export default function AdminFeesScreen() {
               home_delivery_fee: parseInt(home, 10) || 0,
               office_delivery_fee: parseInt(office, 10) || 0,
             }
-          : w
-      )
+          : w,
+      ),
     );
   }, []);
 
@@ -227,9 +294,9 @@ export default function AdminFeesScreen() {
     if (!q) return wilayas;
     return wilayas.filter(
       (w) =>
-        (w.name || '').toLowerCase().includes(q) ||
-        (w.name_fr || '').toLowerCase().includes(q) ||
-        (w.code || '').includes(q)
+        (w.name || "").toLowerCase().includes(q) ||
+        (w.name_fr || "").toLowerCase().includes(q) ||
+        (w.code || "").includes(q),
     );
   }, [wilayas, wilayaSearch]);
 
@@ -240,30 +307,54 @@ export default function AdminFeesScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: theme.colors.background }]}
+      edges={["bottom"]}
+    >
       <UniversalHeader
         title="الرسوم والمرجعية"
         subtitle="عمولات المنصّة، توصيل الولايات"
       />
       <ScrollView
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.primary}
+          />
+        }
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-
         <PlatformFeesEditor initial={settings} theme={theme} onSaved={load} />
 
         <TouchableOpacity
-          style={[styles.collapseBar, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }]}
+          style={[
+            styles.collapseBar,
+            {
+              backgroundColor: theme.colors.surfaceElevated,
+              borderColor: theme.colors.border,
+            },
+          ]}
           onPress={() => setShowSignupRef((v) => !v)}
           activeOpacity={0.75}
         >
-          <Ionicons name="document-text-outline" size={20} color={theme.primary} />
-          <Text style={[typography.bodyBold, { color: theme.colors.text, flex: 1 }]}>
+          <Ionicons
+            name="document-text-outline"
+            size={20}
+            color={theme.primary}
+          />
+          <Text
+            style={[typography.bodyBold, { color: theme.colors.text, flex: 1 }]}
+          >
             حقول التسجيل (كما في شاشة إنشاء الحساب)
           </Text>
-          <Ionicons name={showSignupRef ? 'chevron-up' : 'chevron-down'} size={22} color={theme.colors.textSecondary} />
+          <Ionicons
+            name={showSignupRef ? "chevron-up" : "chevron-down"}
+            size={22}
+            color={theme.colors.textSecondary}
+          />
         </TouchableOpacity>
 
         {showSignupRef && (
@@ -290,15 +381,27 @@ export default function AdminFeesScreen() {
         )}
 
         <TouchableOpacity
-          style={[styles.collapseBar, { backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.border }]}
+          style={[
+            styles.collapseBar,
+            {
+              backgroundColor: theme.colors.surfaceElevated,
+              borderColor: theme.colors.border,
+            },
+          ]}
           onPress={() => setShowWilayaSection((v) => !v)}
           activeOpacity={0.75}
         >
           <Ionicons name="map-outline" size={20} color={theme.primary} />
-          <Text style={[typography.bodyBold, { color: theme.colors.text, flex: 1 }]}>
+          <Text
+            style={[typography.bodyBold, { color: theme.colors.text, flex: 1 }]}
+          >
             رسوم التوصيل ({wilayas.length} ولاية)
           </Text>
-          <Ionicons name={showWilayaSection ? 'chevron-up' : 'chevron-down'} size={22} color={theme.colors.textSecondary} />
+          <Ionicons
+            name={showWilayaSection ? "chevron-up" : "chevron-down"}
+            size={22}
+            color={theme.colors.textSecondary}
+          />
         </TouchableOpacity>
 
         {showWilayaSection && (
@@ -311,12 +414,26 @@ export default function AdminFeesScreen() {
               style={{ marginBottom: spacing.sm }}
             />
             {filteredWilayas.length === 0 ? (
-              <Text style={[typography.caption, { color: theme.colors.textTertiary, textAlign: 'center', padding: spacing.md }]}>
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: theme.colors.textTertiary,
+                    textAlign: "center",
+                    padding: spacing.md,
+                  },
+                ]}
+              >
                 لا توجد نتيجة
               </Text>
             ) : (
               filteredWilayas.map((w) => (
-                <WilayaFeeRow key={w.id} w={w} theme={theme} onSave={updateWilayaFees} />
+                <WilayaFeeRow
+                  key={w.id}
+                  w={w}
+                  theme={theme}
+                  onSave={updateWilayaFees}
+                />
               ))
             )}
           </>
@@ -339,22 +456,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   feeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: spacing.sm,
     marginBottom: spacing.md,
   },
   feeCell: {
-    width: '48%',
+    width: "48%",
     minWidth: 140,
   },
   inputTight: {
     marginBottom: 0,
   },
   collapseBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
@@ -368,21 +485,21 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   checkTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   checkRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 8,
     marginTop: 6,
   },
   wilayaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: borderRadius.sm,
@@ -396,15 +513,15 @@ const styles = StyleSheet.create({
   },
   wilayaCode: {
     ...typography.small,
-    fontFamily: 'Tajawal_500Medium',
+    fontFamily: "Tajawal_500Medium",
   },
   wilayaName: {
     ...typography.caption,
-    fontFamily: 'Tajawal_500Medium',
+    fontFamily: "Tajawal_500Medium",
   },
   wilayaInputs: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
   },
   miniInp: {
@@ -413,15 +530,15 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 6,
-    textAlign: 'center',
-    fontFamily: 'Tajawal_400Regular',
+    textAlign: "center",
+    fontFamily: "Tajawal_400Regular",
     fontSize: 13,
   },
   saveIcon: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

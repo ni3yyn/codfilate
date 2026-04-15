@@ -222,7 +222,7 @@ export default function SubmitOrderScreen() {
               onPress={() => router.canGoBack() ? router.back() : router.replace('/(affiliate)/store')} 
               style={styles.closeBtn}
             >
-               <Ionicons name="arrow-back" size={24} color={theme.colors.text} />
+               <Ionicons name="arrow-forward" size={24} color={theme.colors.text} />
             </TouchableOpacity>
             <Text style={[styles.headerTitle, { color: theme.colors.text }]}>تقديم طلب جديد</Text>
             <View style={{ width: 44 }} />
@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1 },
   header: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
@@ -505,23 +505,23 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  sectionTitle: { ...typography.h3, marginBottom: spacing.sm, marginTop: spacing.md, marginStart: 4, textAlign: 'right' },
+  sectionTitle: { ...typography.h3, marginBottom: spacing.sm, marginTop: spacing.md, marginStart: 4, textAlign: 'right', writingDirection: 'rtl', width: '100%' },
   
   // Product Card
   productCard: { marginBottom: spacing.xs, padding: spacing.md },
-  productHeader: { flexDirection: 'row-reverse', alignItems: 'center' },
+  productHeader: { flexDirection: 'row', alignItems: 'center' },
   productIcon: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  productNameText: { ...typography.bodyBold, fontSize: 16, textAlign: 'right' },
-  productCategory: { fontSize: 12, fontFamily: 'Tajawal_500Medium', marginTop: 2, textAlign: 'right' },
+  productNameText: { ...typography.bodyBold, fontSize: 16, textAlign: 'right', writingDirection: 'rtl' },
+  productCategory: { fontSize: 12, fontFamily: 'Tajawal_500Medium', marginTop: 2, textAlign: 'right', writingDirection: 'rtl' },
   mainPrice: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 18 },
   summaryDivider: { height: 1, marginVertical: 16 },
   
   // Pricing Details
   priceDetails: { gap: 10 },
-  detailRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   detailLabel: { fontSize: 13, fontFamily: 'Tajawal_500Medium' },
   detailValue: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
-  totalRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 16, borderTopWidth: 1 },
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 16, borderTopWidth: 1 },
   totalLabel: { ...typography.bodyBold, fontSize: 16 },
   totalValue: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 22 },
   
@@ -533,12 +533,12 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
   inputRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   priceInputWrapper: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: 8,
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   profitValue: { fontSize: 16, fontFamily: 'Tajawal_800ExtraBold' },
   profitGuide: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     alignItems: 'center',
     padding: 10,
     borderRadius: 8,
@@ -571,24 +571,24 @@ const styles = StyleSheet.create({
 
   // Form Cards
   formCard: { padding: spacing.md, marginBottom: spacing.xs },
-  inputLabel: { ...typography.caption, marginBottom: 8, fontFamily: 'Tajawal_700Bold', marginTop: 4, textAlign: 'right' },
+  inputLabel: { ...typography.caption, marginBottom: 8, fontFamily: 'Tajawal_700Bold', marginTop: 4, textAlign: 'right', writingDirection: 'rtl', width: '100%' },
   
   // Custom Picker
   pickerBtn: { 
     height: 54, 
     borderRadius: 14, 
     borderWidth: 1, 
-    flexDirection: 'row-reverse', 
+    flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: 16, 
     marginBottom: 16 
   },
-  pickerInner: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  pickerInner: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   pickerText: { fontSize: 14, fontFamily: 'Tajawal_500Medium' },
   
   // Delivery Toggle
-  deliveryToggle: { flexDirection: 'row-reverse', gap: 12, marginBottom: 20 },
+  deliveryToggle: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   deliveryOption: { 
     flex: 1, 
     padding: 16, 
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   deliveryOptionTop: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start'
   },
@@ -638,9 +638,9 @@ const styles = StyleSheet.create({
   
   // Sheet
   sheetContainer: { paddingVertical: spacing.sm },
-  searchBox: { flexDirection: 'row-reverse', alignItems: 'center', height: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, gap: 10, marginBottom: 16 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', height: 50, borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, gap: 10, marginBottom: 16 },
   searchInput: { flex: 1, height: '100%', fontFamily: 'Tajawal_500Medium', textAlign: 'right', fontSize: 15 },
-  wilayaItem: { flexDirection: 'row-reverse', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, gap: 14 },
+  wilayaItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, gap: 14 },
   wilayaId: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   wilayaName: { flex: 1, fontSize: 16, textAlign: 'right' },
 });
