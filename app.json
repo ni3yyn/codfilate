@@ -25,7 +25,6 @@
       "allowBackup": false,
       "package": "com.codfilate.app"
     },
-    "jsEngine": "hermes",
     "web": {
       "favicon": "./assets/favicon.png"
     },
