@@ -7,10 +7,10 @@ import {
   RefreshControl,
   Platform,
   TouchableOpacity,
-  Image,
   ScrollView,
   Linking,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
@@ -141,7 +141,12 @@ export default function MerchantsScreen() {
             </Text>
           </View>
           {item.logo_url && (
-            <Image source={{ uri: item.logo_url }} style={styles.storeLogo} />
+            <Image 
+              source={{ uri: item.logo_url }} 
+              style={styles.storeLogo} 
+              contentFit="cover"
+              transition={200}
+            />
           )}
         </View>
 
@@ -308,6 +313,8 @@ export default function MerchantsScreen() {
                     <Image
                       source={{ uri: selectedStore.logo_url }}
                       style={styles.fullLogo}
+                      contentFit="cover"
+                      transition={200}
                     />
                   ) : (
                     <Ionicons
@@ -398,6 +405,8 @@ export default function MerchantsScreen() {
                       <Image
                         source={{ uri: p.image_url }}
                         style={styles.miniProdImg}
+                        contentFit="cover"
+                        transition={200}
                       />
                     ) : (
                       <View style={styles.miniProdPlaceholder}>

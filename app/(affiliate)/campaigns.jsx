@@ -3,6 +3,8 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, Share, ScrollView, LayoutAnimation, Modal, TextInput
 } from "react-native";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -87,13 +89,14 @@ export default function AffiliateCampaignsScreen() {
   const { products, fetchProducts } = useProductStore();
   const { orders, fetchAffiliateOrders } = useOrderStore();
   const { campaigns, isLoading, fetchCampaignsForAffiliate, createCampaign, updateCampaign, deleteCampaign, setCampaignActive } = useCampaignStore();
-  const { showConfirm } = useAlertStore();
+  const { showConfirm, showAlert } = useAlertStore();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState(null);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [modalError, setModalError] = useState("");
+  const [imageUris, setImageUris] = useState([]);
 
   const [step, setStep] = useState(1);
   const [productId, setProductId] = useState("");
@@ -101,9 +104,10 @@ export default function AffiliateCampaignsScreen() {
   const [slug, setSlug] = useState("");
 
   const [pageConfig, setPageConfig] = useState({
-    template: '', // Start empty to force choice
+    template: '',
     headline: '', subheadline: '', btnText: '',
     f1Title: '', f1Desc: '', f2Title: '', f2Desc: '', f3Title: '', f3Desc: '',
+    images: []
   });
 
   const [selectedTemplateCat, setSelectedTemplateCat] = useState('all');
@@ -114,6 +118,24 @@ export default function AffiliateCampaignsScreen() {
   const [previewWilayaModal, setPreviewWilayaModal] = useState(false);
   const [previewWilayaSearch, setPreviewWilayaSearch] = useState("");
   const [appWilayas, setAppWilayas] = useState([]);
+
+  const pickImages = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: 8,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      const newUris = result.assets.map((a) => a.uri);
+      setImageUris((prev) => [...prev, ...newUris].slice(0, 8));
+    }
+  };
+
+  const removeImage = (index) => {
+    setImageUris((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const filteredPreviewWilayas = useMemo(() => {
     if (!previewWilayaSearch) return appWilayas;
@@ -158,8 +180,8 @@ export default function AffiliateCampaignsScreen() {
     setSalePrice(publishedProducts[0] ? String(Number(publishedProducts[0].price)) : "");
     setSlug("");
     setSelectedTemplateCat('all');
-    // Important: Keep template blank to enforce UX flow
-    setPageConfig({ template: '', headline: '', subheadline: '', btnText: '', f1Title: '', f1Desc: '', f2Title: '', f2Desc: '', f3Title: '', f3Desc: '' });
+    setPageConfig({ template: '', headline: '', subheadline: '', btnText: '', f1Title: '', f1Desc: '', f2Title: '', f2Desc: '', f3Title: '', f3Desc: '', images: [] });
+    setImageUris([]);
     setModalOpen(true);
   };
 
@@ -173,11 +195,14 @@ export default function AffiliateCampaignsScreen() {
     setSelectedTemplateCat('all');
     const config = typeof campaign.page_config === 'string' ? JSON.parse(campaign.page_config) : (campaign.page_config || {});
     setPageConfig({
-      template: config.template || '', headline: config.headline || '', subheadline: config.subheadline || '', btnText: config.btnText || '',
+      template: config.template || 'supreme',
+      headline: config.headline || '', subheadline: config.subheadline || '', btnText: config.btnText || '',
       f1Title: config.features?.[0]?.title || '', f1Desc: config.features?.[0]?.desc || '',
       f2Title: config.features?.[1]?.title || '', f2Desc: config.features?.[1]?.desc || '',
-      f3Title: config.features?.[2]?.title || '', f3Desc: config.features?.[2]?.desc || ''
+      f3Title: config.features?.[2]?.title || '', f3Desc: config.features?.[2]?.desc || '',
+      images: config.images || []
     });
+    setImageUris(config.images || []);
     setModalOpen(true);
   };
 
@@ -204,36 +229,47 @@ export default function AffiliateCampaignsScreen() {
       { title: pageConfig.f1Title.trim(), desc: pageConfig.f1Desc.trim() },
       { title: pageConfig.f2Title.trim(), desc: pageConfig.f2Desc.trim() },
       { title: pageConfig.f3Title.trim(), desc: pageConfig.f3Desc.trim() }
-    ]
+    ],
+    images: imageUris
   });
 
   const saveCampaign = async () => {
-    setModalError("");
-    if (!pageConfig.template) { setModalError("عذراً، يجب عليك اختيار قالب لتصميم الصفحة أولاً."); return; }
-    if (!pageConfig.headline.trim()) { setModalError("يرجى إدخال العنوان الرئيسي للصفحة لجذب الانتباه."); return; }
-    if (!pageConfig.btnText.trim()) { setModalError("نص زر الطلب مطلوب لتشجيع الزبون على الشراء."); return; }
-
-    if (!affiliateProfile?.id) { setModalError("تعذر تحميل ملف المسوق. يرجى تحديث الصفحة."); return; }
-
+    if (!pageConfig.template) { setModalError("يرجى اختيار قالب لصفحة الهبوط."); return; }
     setSaving(true);
-    const pageConfigData = getPageConfigData();
-    let res = editingCampaignId
-      ? await updateCampaign(editingCampaignId, { productId, salePrice, slug, page_config: pageConfigData })
-      : await createCampaign({ affiliateId: affiliateProfile.id, productId, salePrice, slug, page_config: pageConfigData });
-    setSaving(false);
+    setModalError("");
 
-    if (res.success) {
-      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setModalOpen(false);
-      const link = generateCampaignLink(slug);
-      showConfirm({
-        title: editingCampaignId ? "تم تحديث الصفحة" : "تم بناء الصفحة بنجاح",
-        message: `تم التحديث بنجاح\n${link}`,
-        confirmText: "مشاركة الصفحة", cancelText: "إغلاق", type: "success",
-        onConfirm: () => Share.share({ message: link, url: link }),
-      });
-    } else {
-      setModalError(res.error);
+    try {
+      const uploadResults = await Promise.all(imageUris.map(async (uri) => {
+        if (uri.startsWith('http')) return uri;
+        const res = await useProductStore.getState().uploadProductImage(uri, affiliateProfile?.id || currentStore?.id || 'anonymous');
+        return res.success ? res.url : null;
+      }));
+      const finalImageUrls = uploadResults.filter(Boolean);
+
+      const finalPageConfig = { ...getPageConfigData(), images: finalImageUrls };
+
+      let res = editingCampaignId
+        ? await updateCampaign(editingCampaignId, { productId, salePrice, slug, page_config: finalPageConfig })
+        : await createCampaign({ affiliateId: affiliateProfile.id, productId, salePrice, slug, page_config: finalPageConfig });
+      
+      setSaving(false);
+
+      if (res.success) {
+        if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setModalOpen(false);
+        const link = generateCampaignLink(slug);
+        showConfirm({
+          title: editingCampaignId ? "تم تحديث الصفحة" : "تم بناء الصفحة بنجاح",
+          message: `تم التحديث بنجاح\n${link}`,
+          confirmText: "مشاركة الصفحة", cancelText: "إغلاق", type: "success",
+          onConfirm: () => Share.share({ message: link, url: link }),
+        });
+      } else {
+        setModalError(res.error);
+      }
+    } catch (e) {
+      setSaving(false);
+      setModalError("حدث خطأ أثناء رفع الصور أو حفظ البيانات.");
     }
   };
 
@@ -245,6 +281,12 @@ export default function AffiliateCampaignsScreen() {
         const res = await deleteCampaign(id);
         if (res.success) {
           if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        } else {
+          showAlert({
+            title: "خطأ",
+            message: res.error || "فشل حذف الصفحة، يرجى المحاولة مرة أخرى.",
+            type: "error"
+          });
         }
       }
     });
@@ -283,7 +325,6 @@ export default function AffiliateCampaignsScreen() {
   };
 
   const renderPreviewTemplate = () => {
-    // Edge case if somehow preview is triggered without template
     if (!pageConfig.template) {
       return (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -318,7 +359,6 @@ export default function AffiliateCampaignsScreen() {
     }
   };
 
-  // Custom UI Component for Scroll Hint
   const ScrollHintHeader = ({ title }) => (
     <View style={styles.scrollHintContainer}>
       <Text style={[styles.sectionHeadingBuilder, { color: theme.primary, marginBottom: 0 }]}>{title}</Text>
@@ -405,7 +445,6 @@ export default function AffiliateCampaignsScreen() {
         }}
       />
 
-      {/* --- Main BottomSheet for Campaign Creation --- */}
       <BottomSheet
         visible={modalOpen}
         onClose={() => { setModalOpen(false); setStep(1); }}
@@ -414,8 +453,6 @@ export default function AffiliateCampaignsScreen() {
         scrollable={false}
       >
         <View style={{ flexShrink: 1, maxHeight: 750, width: '100%' }}>
-
-          {/* Scrollable Content Area */}
           <ScrollView
             style={{ flexShrink: 1, width: '100%' }}
             contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, paddingTop: spacing.sm }}
@@ -426,12 +463,6 @@ export default function AffiliateCampaignsScreen() {
                 {publishedProducts.length > 0 && (
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 }}>
                     <Text style={[styles.modalLabel, { color: theme.colors.textSecondary }]}>{editingCampaignId ? "المنتج المحدد (مقفل أثناء التعديل)" : "اختر المنتج من المتجر"}</Text>
-                    {publishedProducts.length > 2 && !editingCampaignId && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Text style={{ fontFamily: 'Tajawal_500Medium', fontSize: 13, color: theme.colors.textTertiary }}>اسحب للمزيد</Text>
-                        <Ionicons name="arrow-back" size={13} color={theme.colors.textTertiary} />
-                      </View>
-                    )}
                   </View>
                 )}
 
@@ -464,7 +495,6 @@ export default function AffiliateCampaignsScreen() {
               </View>
             ) : (
               <View>
-                {/* SMART GUIDE UX */}
                 <View style={[styles.guideBox, { backgroundColor: theme.isDark ? '#3b2f15' : '#FFFBEB', borderColor: theme.isDark ? '#b45309' : '#FDE68A' }]}>
                   <Ionicons name="bulb" size={32} color="#F59E0B" />
                   <View style={{ flex: 1, marginRight: 14 }}>
@@ -473,7 +503,6 @@ export default function AffiliateCampaignsScreen() {
                   </View>
                 </View>
 
-                {/* CATEGORIES SCROLL */}
                 <ScrollHintHeader title="تصنيف القالب" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 16 }}>
                   {TEMPLATE_CATEGORIES.map(cat => {
@@ -494,7 +523,6 @@ export default function AffiliateCampaignsScreen() {
                   })}
                 </ScrollView>
 
-                {/* TEMPLATES CAROUSEL */}
                 <ScrollHintHeader title="اختر القالب الأنسب" />
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 14, paddingBottom: 20 }} style={{ marginBottom: 10 }}>
                   {TEMPLATES_DATA.filter(t => selectedTemplateCat === 'all' || t.category === selectedTemplateCat).map(tpl => {
@@ -524,7 +552,28 @@ export default function AffiliateCampaignsScreen() {
                   })}
                 </ScrollView>
 
-                {/* TEXT SETTINGS */}
+                <Text style={[styles.sectionHeadingBuilder, { color: theme.primary, marginTop: spacing.sm }]}>صور المنتج (اختياري)</Text>
+                <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textTertiary, fontSize: 13, marginBottom: 12 }}>إضافة صور متعددة تنشئ معرضاً تفاعلياً (Carousel) في الصفحة.</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
+                  {imageUris.map((uri, index) => (
+                    <View key={index} style={styles.imageEditThumb}>
+                      <Image 
+                        source={{ uri }} 
+                        style={styles.imageEditImg} 
+                        contentFit="cover"
+                        transition={200}
+                      />
+                      <TouchableOpacity onPress={() => removeImage(index)} style={styles.removeImgBtn}><Ionicons name="close-circle" size={22} color={theme.error} /></TouchableOpacity>
+                    </View>
+                  ))}
+                  {imageUris.length < 8 && (
+                    <TouchableOpacity onPress={pickImages} style={[styles.addImageBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface2 }]}>
+                      <Ionicons name="camera-outline" size={32} color={theme.colors.textTertiary} />
+                      <Text style={{ color: theme.colors.textTertiary, fontSize: 12, fontFamily: 'Tajawal_500Medium' }}>إضافة صورة</Text>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
+
                 <Text style={[styles.sectionHeadingBuilder, { color: theme.primary }]}>النصوص الأساسية للصفحة</Text>
                 <View style={{ gap: 12, marginBottom: 24 }}>
                   <Input label="العنوان الجذاب (Headline)" placeholder="اترك فارغاً للنص الافتراضي (مثال: أداة لا غنى عنها!)" value={pageConfig.headline} onChangeText={(t) => { setPageConfig({ ...pageConfig, headline: t }); setModalError(""); }} />
@@ -554,9 +603,7 @@ export default function AffiliateCampaignsScreen() {
             )}
           </ScrollView>
 
-          {/* FIXED FOOTER WITH ERROR HANDLING */}
           <View style={[styles.fixedFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
-            {/* Inline Error Box */}
             {modalError ? (
               <View style={styles.errorBox}>
                 <Ionicons name="alert-circle" size={18} color={theme.error} />
@@ -577,7 +624,6 @@ export default function AffiliateCampaignsScreen() {
         </View>
       </BottomSheet>
 
-      {/* Preview Modal */}
       <Modal visible={previewVisible} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setPreviewVisible(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: getBackgroundColor(pageConfig.template) }}>
           <View style={{ flex: 1 }}>{renderPreviewTemplate()}</View>
@@ -679,7 +725,6 @@ export default function AffiliateCampaignsScreen() {
           </BottomSheet>
         </SafeAreaView>
       </Modal>
-
     </SafeAreaView>
   );
 }

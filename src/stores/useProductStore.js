@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { PAGINATION_LIMIT } from '../lib/constants';
+import { appConfig } from '../lib/appConfig';
+import { Platform } from 'react-native';
 
 export const useProductStore = create((set, get) => ({
   products: [],
@@ -50,6 +52,7 @@ export const useProductStore = create((set, get) => ({
         .from('products')
         .select('*, category:categories(id, name, icon), subcategory:subcategories(id, name, icon), product_images(*)')
         .eq('store_id', storeId)
+        .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -171,22 +174,57 @@ export const useProductStore = create((set, get) => ({
 
   uploadProductImage: async (uri, storeId) => {
     try {
-      const fileName = `${storeId}/product-${Date.now()}.jpg`;
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      const { cloudName, uploadPreset } = appConfig.cloudinary;
+      
+      if (!cloudName || !uploadPreset) {
+        throw new Error('يرجى إعادة تشغيل خادم التطبيق (NPM Start) لتفعيل إعدادات Cloudinary الجديدة.');
+      }
 
-      const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+      let fileToUpload;
+      if (Platform.OS === 'web') {
+        const responseFile = await fetch(uri);
+        fileToUpload = await responseFile.blob();
+      } else {
+        fileToUpload = {
+          uri: uri,
+          type: 'image/jpeg',
+          name: `upload-${Date.now()}.jpg`,
+        };
+      }
 
-      if (error) throw error;
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+      formData.append('upload_preset', uploadPreset);
+      formData.append('folder', 'products');
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(data.path);
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Accept': 'application/json',
+          },
+        }
+      );
 
-      return { success: true, url: publicUrl };
+      if (__DEV__) console.log('[Cloudinary] Upload response status:', response.status);
+
+      const result = await response.json();
+
+      if (result.error) {
+        if (__DEV__) console.error('[Cloudinary] Upload API Error:', result.error);
+        throw new Error(`Cloudinary Error: ${result.error.message}`);
+      }
+
+      if (__DEV__) console.log('[Cloudinary] Upload Success:', result.secure_url);
+
+      // Add auto-optimization transformations
+      const optimizedUrl = result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+
+      return { success: true, url: optimizedUrl };
     } catch (error) {
+      if (__DEV__) console.error('[Cloudinary] Upload failed:', error);
       return { success: false, error: error.message };
     }
   },

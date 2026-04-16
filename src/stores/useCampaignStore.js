@@ -52,6 +52,7 @@ export const useCampaignStore = create((set, get) => ({
         .from('marketing_campaigns')
         .select('*, products(id, name, price, image_url, listing_status)')
         .in('affiliate_id', affiliateIds)
+        .eq('is_active', true)
         .order('created_at', { ascending: false }));
 
       if (error) throw error;
@@ -181,7 +182,7 @@ export const useCampaignStore = create((set, get) => ({
     try {
       const { error } = await executeSupabase(() => supabase
         .from('marketing_campaigns')
-        .delete()
+        .update({ is_active: false })
         .eq('id', campaignId));
 
       if (error) throw error;

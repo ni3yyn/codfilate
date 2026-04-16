@@ -6,11 +6,11 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Image,
   Platform,
   Linking,
   TextInput,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -279,7 +279,12 @@ export default function InventoryScreen() {
                 <View style={styles.cardMain}>
                   <View style={styles.imageContainer}>
                     {item.product_image ? (
-                      <Image source={{ uri: item.product_image }} style={styles.productImage} />
+                      <Image 
+                        source={{ uri: item.product_image }} 
+                        style={styles.productImage} 
+                        contentFit="cover"
+                        transition={200}
+                      />
                     ) : (
                       <View style={[styles.imagePlaceholder, { backgroundColor: theme.colors.surface }]}>
                         <Ionicons name="cube" size={24} color={theme.colors.textTertiary} />

@@ -4,13 +4,13 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  Image,
   RefreshControl,
   Alert,
   StyleSheet,
   ScrollView,
   Platform,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -153,11 +153,15 @@ export default function ProductsScreen() {
     if (!name.trim() || !price.trim()) { showAlert({ title: 'خطأ', message: 'الاسم والسعر مطلوبان', type: 'error' }); return; }
     setFormLoading(true);
 
-    // Upload first image as main image_url
-    let imageUrl = null;
+    // 1. Upload all images to Cloudinary
+    const uploadedUrls = [];
     if (imageUris.length > 0 && currentStore) {
-      const uploadResult = await uploadProductImage(imageUris[0], currentStore.id);
-      if (uploadResult.success) imageUrl = uploadResult.url;
+      for (const uri of imageUris) {
+        const uploadResult = await uploadProductImage(uri, currentStore.id);
+        if (uploadResult.success) {
+          uploadedUrls.push(uploadResult.url);
+        }
+      }
     }
 
     const productData = {
@@ -165,30 +169,26 @@ export default function ProductsScreen() {
       name: name.trim(),
       price: parseFloat(price),
       description: description.trim(),
+      image_url: uploadedUrls.length > 0 ? uploadedUrls[0] : null,
+      gallery_urls: uploadedUrls, // The New Array Column
     };
+
     if (stock.trim()) productData.stock = parseInt(stock);
     if (weight.trim()) productData.weight = parseFloat(weight);
     if (dimensions.trim()) productData.dimensions = dimensions.trim();
     if (sku.trim()) productData.sku = sku.trim();
-    if (imageUrl) productData.image_url = imageUrl;
     if (selectedCategory) productData.category_id = selectedCategory;
     if (selectedSubcategory) productData.subcategory_id = selectedSubcategory;
     productData.listing_status = 'published';
 
     const result = await createProduct(productData);
     if (result.success) {
-      // Upload additional images to product_images table
-      if (imageUris.length > 1 && result.data) {
-        for (let i = 1; i < imageUris.length; i++) {
-          const uploadRes = await uploadProductImage(imageUris[i], currentStore.id);
-          if (uploadRes.success) {
-            await addProductImage(result.data.id, currentStore.id, uploadRes.url, i);
-          }
+      // Legacy support: also add to product_images table if it exists
+      // This ensures older code still works while we transition
+      if (uploadedUrls.length > 0 && result.data) {
+        for (let i = 0; i < uploadedUrls.length; i++) {
+          await addProductImage(result.data.id, currentStore.id, uploadedUrls[i], i);
         }
-      }
-      // Also add the first image to product_images for gallery consistency
-      if (imageUrl && result.data) {
-        await addProductImage(result.data.id, currentStore.id, imageUrl, 0);
       }
 
       setName(''); setPrice(''); setDescription(''); setStock(''); setWeight(''); setDimensions(''); setSku('');
@@ -206,7 +206,16 @@ export default function ProductsScreen() {
       confirmText: 'حذف',
       cancelText: 'إلغاء',
       type: 'destructive',
-      onConfirm: () => deleteProduct(productId)
+      onConfirm: async () => {
+        const result = await deleteProduct(productId);
+        if (!result.success) {
+          showAlert({
+            title: 'خطأ في الحذف',
+            message: result.error || 'فشل حذف المنتج، يرجى المحاولة مرة أخرى.',
+            type: 'error'
+          });
+        }
+      }
     });
   };
 
@@ -362,7 +371,12 @@ export default function ProductsScreen() {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.galleryRow}>
         {imageUris.map((uri, index) => (
           <View key={index} style={styles.galleryThumb}>
-            <Image source={{ uri }} style={styles.galleryImage} />
+            <Image 
+              source={{ uri }} 
+              style={styles.galleryImage} 
+              contentFit="cover"
+              transition={200}
+            />
             {index === 0 && (
               <View style={[styles.primaryBadge, { backgroundColor: theme.primary }]}>
                 <Ionicons name="star" size={10} color="#FFF" />
@@ -399,7 +413,12 @@ export default function ProductsScreen() {
         <View style={styles.productRow}>
           {item.image_url ? (
             <View>
-              <Image source={{ uri: item.image_url }} style={styles.productImage} />
+              <Image 
+                source={{ uri: item.image_url }} 
+                style={styles.productImage} 
+                contentFit="cover"
+                transition={200}
+              />
               {imageCount > 1 && (
                 <View style={[styles.imageCountBadge, { backgroundColor: theme.primary }]}>
                   <Ionicons name="images-outline" size={10} color="#FFF" />

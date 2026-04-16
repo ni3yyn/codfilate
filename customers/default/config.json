@@ -11,6 +11,10 @@
     "url": "https://akqcfnqkdsrkzhnongbi.supabase.co",
     "anonKey": "sb_publishable_P0jafVUAjRmuz9qjjY_OgA_bDkCB9MT"
   },
+  "cloudinary": {
+    "cloudName": "dss8bhhbk",
+    "uploadPreset": "codfilate"
+  },
   "theme": {
     "primaryColor": "#6C5CE7",
     "primaryLightColor": "#A29BFE",

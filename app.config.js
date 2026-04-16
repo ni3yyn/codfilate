@@ -49,6 +49,7 @@ module.exports = ({ config: defaultConfig }) => ({
   },
   plugins: [
     'expo-router',
+    'expo-sharing',
     [
       'expo-build-properties',
       {

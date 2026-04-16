@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -131,7 +132,12 @@ export default function SettingsScreen() {
             activeOpacity={0.7}
           >
             {currentStore?.logo_url && !uploadingLogo ? (
-              <Image source={{ uri: currentStore.logo_url }} style={styles.logoPreview} />
+              <Image 
+                source={{ uri: currentStore.logo_url }} 
+                style={styles.logoPreview} 
+                contentFit="cover"
+                transition={200}
+              />
             ) : (
               <View style={styles.logoPlaceholder}>
                 <Ionicons name={uploadingLogo ? "sync-outline" : "image-outline"} size={32} color={theme.primary} />

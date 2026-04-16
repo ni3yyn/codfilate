@@ -1,12 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
 import {
-    View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Image, useWindowDimensions, Platform, ScrollView, TextInput, ActivityIndicator
+    View, Text, StyleSheet, TouchableOpacity, Animated, Easing, useWindowDimensions, Platform, ScrollView, TextInput, ActivityIndicator
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { formatCurrency } from '../../lib/utils';
 import { DELIVERY_TYPES_AR } from '../../lib/constants';
+import { useRef, useEffect, useState } from 'react';
+
+const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
 
 
 // ==========================================
@@ -103,6 +106,296 @@ const DiagonalStripes = ({ color, width = 200, height = 200, style, position }) 
         ))}
     </View>
 );
+
+// ==========================================
+// ENHANCED CAROUSEL WITH THUMBNAILS & GESTURES
+// ==========================================
+export const EnhancedImageCarousel = ({
+    images,
+    height = 400,
+    borderRadius = 20,
+    style,
+    showThumbnails = true,
+    autoplay = false,
+    autoplayInterval = 4000,
+    showArrows = true,
+    showCounter = true
+}) => {
+    const { width } = useWindowDimensions();
+    const scrollX = useRef(new Animated.Value(0)).current;
+    const flatListRef = useRef(null);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const autoplayTimer = useRef(null);
+
+    if (!images || images.length === 0) return null;
+
+    // Single image - simple display
+    if (images.length === 1) {
+        return (
+            <View style={[{ width: '100%', height, borderRadius, overflow: 'hidden' }, style]}>
+                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+            </View>
+        );
+    }
+
+    // Autoplay logic
+    useEffect(() => {
+        if (autoplay && images.length > 1) {
+            autoplayTimer.current = setInterval(() => {
+                const nextIndex = (currentIndex + 1) % images.length;
+                flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+                setCurrentIndex(nextIndex);
+            }, autoplayInterval);
+        }
+        return () => {
+            if (autoplayTimer.current) clearInterval(autoplayTimer.current);
+        };
+    }, [autoplay, currentIndex, images.length, autoplayInterval]);
+
+    const handleScroll = Animated.event(
+        [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+        {
+            useNativeDriver: false,
+            listener: (event) => {
+                const offsetX = event.nativeEvent.contentOffset.x;
+                const index = Math.round(offsetX / width);
+                if (index !== currentIndex) {
+                    setCurrentIndex(index);
+                }
+            }
+        }
+    );
+
+    const scrollToIndex = (index) => {
+        flatListRef.current?.scrollToIndex({ index, animated: true });
+        setCurrentIndex(index);
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+
+    const handlePrev = () => {
+        const prevIndex = currentIndex === 0 ? images.length - 1 : currentIndex - 1;
+        scrollToIndex(prevIndex);
+    };
+
+    const handleNext = () => {
+        const nextIndex = (currentIndex + 1) % images.length;
+        scrollToIndex(nextIndex);
+    };
+
+    return (
+        <View style={[{ width: '100%' }, style]}>
+            {/* Main Carousel */}
+            <View style={{ width: '100%', height, borderRadius, overflow: 'hidden', position: 'relative' }}>
+                <Animated.FlatList
+                    ref={flatListRef}
+                    data={images}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onScroll={handleScroll}
+                    scrollEventThrottle={16}
+                    keyExtractor={(_, i) => i.toString()}
+                    renderItem={({ item }) => (
+                        <View style={{ width, height }}>
+                            <Image source={{ uri: item }} style={styles.imgFill} contentFit="cover" transition={200} />
+                        </View>
+                    )}
+                    getItemLayout={(_, index) => ({
+                        length: width,
+                        offset: width * index,
+                        index,
+                    })}
+                />
+
+                {/* Image Counter Badge */}
+                {showCounter && (
+                    <View style={styles.counterBadge}>
+                        <Text style={styles.counterText}>
+                            {currentIndex + 1} / {images.length}
+                        </Text>
+                    </View>
+                )}
+
+                {/* Gradient Overlays for better arrow visibility */}
+                <LinearGradient
+                    colors={['rgba(0,0,0,0.3)', 'transparent']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0.15, y: 0 }}
+                    style={[styles.gradientOverlay, { left: 0 }]}
+                    pointerEvents="none"
+                />
+                <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.3)']}
+                    start={{ x: 0.85, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={[styles.gradientOverlay, { right: 0 }]}
+                    pointerEvents="none"
+                />
+            </View>
+
+            {/* Pagination Dots */}
+            <View style={styles.paginationContainer}>
+                <View style={styles.paginationDotsRow}>
+                    {images.map((_, i) => {
+                        const widthAnim = scrollX.interpolate({
+                            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
+                            outputRange: [8, 28, 8],
+                            extrapolate: 'clamp'
+                        });
+                        const opacity = scrollX.interpolate({
+                            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
+                            outputRange: [0.4, 1, 0.4],
+                            extrapolate: 'clamp'
+                        });
+                        const backgroundColor = scrollX.interpolate({
+                            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
+                            outputRange: ['#FFFFFF80', '#FFFFFF', '#FFFFFF80'],
+                            extrapolate: 'clamp'
+                        });
+
+                        return (
+                            <TouchableOpacity key={i} onPress={() => scrollToIndex(i)} activeOpacity={0.7}>
+                                <Animated.View
+                                    style={[
+                                        styles.carouselDot,
+                                        {
+                                            width: widthAnim,
+                                            opacity,
+                                            backgroundColor,
+                                        }
+                                    ]}
+                                />
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+            </View>
+
+            {/* Thumbnail Strip (Optional) */}
+            {showThumbnails && (
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.thumbnailContainer}
+                    style={{ marginTop: 12 }}
+                >
+                    {images.map((img, i) => (
+                        <TouchableOpacity
+                            key={i}
+                            onPress={() => scrollToIndex(i)}
+                            activeOpacity={0.8}
+                            style={[
+                                styles.thumbnailWrapper,
+                                currentIndex === i && styles.thumbnailActive
+                            ]}
+                        >
+                            <Image
+                                source={{ uri: img }}
+                                style={styles.thumbnail}
+                                contentFit="cover"
+                                transition={200}
+                            />
+                            {currentIndex === i && (
+                                <View style={styles.thumbnailOverlay}>
+                                    <View style={styles.thumbnailActiveIndicator} />
+                                </View>
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            )}
+
+            {/* Navigation Arrows */}
+            {showArrows && images.length > 1 && (
+                <>
+                    <TouchableOpacity
+                        style={[styles.navArrow, styles.leftArrow]}
+                        onPress={handlePrev}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="chevron-back" size={22} color="#FFF" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.navArrow, styles.rightArrow]}
+                        onPress={handleNext}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="chevron-forward" size={22} color="#FFF" />
+                    </TouchableOpacity>
+                </>
+            )}
+        </View>
+    );
+};
+
+// Simple Image Gallery (Fallback/Alternative)
+export const SimpleImageGallery = ({ images, height = 400, borderRadius = 20, style }) => {
+    const { width } = useWindowDimensions();
+    const [activeIndex, setActiveIndex] = useState(0);
+
+    if (!images || images.length === 0) return null;
+
+    if (images.length === 1) {
+        return (
+            <View style={[{ width: '100%', height, borderRadius, overflow: 'hidden' }, style]}>
+                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+            </View>
+        );
+    }
+
+    return (
+        <View style={[{ width: '100%', height }, style]}>
+            <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={(e) => {
+                    const offset = e.nativeEvent.contentOffset.x;
+                    setActiveIndex(Math.round(offset / width));
+                }}
+                scrollEventThrottle={16}
+            >
+                {images.map((img, i) => (
+                    <View key={i} style={{ width, height }}>
+                        <Image source={{ uri: img }} style={[styles.imgFill, { borderRadius }]} contentFit="cover" transition={200} />
+                    </View>
+                ))}
+            </ScrollView>
+
+            {/* Dots Indicator */}
+            <View style={styles.simpleDotsContainer}>
+                {images.map((_, i) => (
+                    <View
+                        key={i}
+                        style={[
+                            styles.simpleDot,
+                            {
+                                backgroundColor: i === activeIndex ? '#FFF' : '#FFFFFF60',
+                                width: i === activeIndex ? 24 : 8
+                            }
+                        ]}
+                    />
+                ))}
+            </View>
+        </View>
+    );
+};
+
+// Modern Image Gallery (Uses Enhanced Carousel)
+export const ModernImageGallery = ({ images, height = 400, borderRadius = 20, style }) => {
+    return (
+        <EnhancedImageCarousel
+            images={images}
+            height={height}
+            borderRadius={borderRadius}
+            style={style}
+            showThumbnails={true}
+            autoplay={false}
+            showArrows={true}
+            showCounter={true}
+        />
+    );
+};
 
 // ==========================================
 // ADVANCED SHIMMER BUTTON
@@ -593,7 +886,7 @@ export const UniversalCheckoutForm = ({ theme, form, setForm, selectedWilaya, se
         if (!form.phone || form.phone.length < 10) newErrors.phone = true;
         if (!selectedWilaya) newErrors.wilaya = true;
         if (!form.commune || form.commune.length < 3) newErrors.commune = true;
-        
+
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -619,7 +912,7 @@ export const UniversalCheckoutForm = ({ theme, form, setForm, selectedWilaya, se
                     value={form.name}
                     onChangeText={(t) => {
                         setForm({ ...form, name: t });
-                        if (errors.name) setErrors({...errors, name: false});
+                        if (errors.name) setErrors({ ...errors, name: false });
                     }}
                     themeColors={themeColors}
                     error={errors.name}
@@ -631,7 +924,7 @@ export const UniversalCheckoutForm = ({ theme, form, setForm, selectedWilaya, se
                     value={form.phone}
                     onChangeText={(t) => {
                         setForm({ ...form, phone: t });
-                        if (errors.phone) setErrors({...errors, phone: false});
+                        if (errors.phone) setErrors({ ...errors, phone: false });
                     }}
                     keyboardType="phone-pad"
                     themeColors={themeColors}
@@ -644,7 +937,7 @@ export const UniversalCheckoutForm = ({ theme, form, setForm, selectedWilaya, se
                     selectedValue={selectedWilaya ? `${selectedWilaya.code} - ${selectedWilaya.name}` : null}
                     onPress={() => {
                         setWilayaModal(true);
-                        if (errors.wilaya) setErrors({...errors, wilaya: false});
+                        if (errors.wilaya) setErrors({ ...errors, wilaya: false });
                     }}
                     themeColors={themeColors}
                     error={errors.wilaya}
@@ -656,7 +949,7 @@ export const UniversalCheckoutForm = ({ theme, form, setForm, selectedWilaya, se
                     value={form.commune}
                     onChangeText={(t) => {
                         setForm({ ...form, commune: t });
-                        if (errors.commune) setErrors({...errors, commune: false});
+                        if (errors.commune) setErrors({ ...errors, commune: false });
                     }}
                     themeColors={themeColors}
                     error={errors.commune}
@@ -758,6 +1051,8 @@ export const ArtisanTemplate = (props) => {
         { icon: 'flash', color: '#7b5400', bg: 'rgba(123,84,0,0.1)', title: 'توصيل سريع', desc: 'شحن آمن وسريع لجميع الولايات مع الدفع عند الاستلام.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#f9f6f3' }}>
             <AbstractBlob color="#a63400" size={500} position={{ top: -100, right: -150 }} />
@@ -778,7 +1073,15 @@ export const ArtisanTemplate = (props) => {
                         </View>
                         <FadeInUp delay={200} style={[styles.heroImgWrap, isMobile && { width: '100%' }]}>
                             <Animated.View style={{ transform: [{ translateY: parallaxY }] }}>
-                                <FloatingElement delay={0} duration={5000} distance={20}><View style={[styles.heroImgInner, { borderRadius: 50, transform: [{ rotate: '3deg' }] }]}><Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="cover" /></View></FloatingElement>
+                                {images.length > 1 ? (
+                                    <EnhancedImageCarousel images={images} height={isMobile ? 350 : 500} borderRadius={50} style={{ transform: [{ rotate: '3deg' }] }} />
+                                ) : (
+                                    <FloatingElement delay={0} duration={5000} distance={20}>
+                                        <View style={[styles.heroImgInner, { borderRadius: 50, transform: [{ rotate: '3deg' }] }]}>
+                                            <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+                                        </View>
+                                    </FloatingElement>
+                                )}
                                 <View style={[styles.blob, { backgroundColor: '#00656f', bottom: -30, left: -30, width: 250, height: 250 }]} />
                             </Animated.View>
                         </FadeInUp>
@@ -843,6 +1146,8 @@ export const SupremeTemplate = (props) => {
         { icon: 'rocket', color: '#111827', bg: '#F3F4F6', title: 'سرعة التنفيذ', desc: 'يصلك طلبك في وقت قياسي.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
             <View style={{ position: 'absolute', top: 150, left: -200, width: 600, height: 600, borderRadius: 300, borderWidth: 1, borderColor: '#F3F4F6' }} />
@@ -858,7 +1163,11 @@ export const SupremeTemplate = (props) => {
                             <TouchableOpacity style={[styles.secondaryBtn, { borderColor: '#E5E7EB', borderRadius: 100, paddingHorizontal: 40 }]} onPress={scrollToFeatures}><Text style={[styles.secondaryBtnText, { color: '#374151' }]}>المواصفات</Text></TouchableOpacity>
                         </FadeInUp>
                         <FadeInUp delay={400} style={{ width: '100%', maxWidth: 900, aspectRatio: 16 / 9, marginTop: 60, borderRadius: 40, overflow: 'hidden', backgroundColor: '#F9FAFB', elevation: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 40 }}>
-                            <Animated.Image source={{ uri: campaign.products?.image_url }} style={[styles.imgFill, { transform: [{ scale: scaleImg }] }]} resizeMode="cover" />
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                            ) : (
+                                <AnimatedExpoImage source={{ uri: images[0] }} style={[styles.imgFill, { transform: [{ scale: scaleImg }] }]} contentFit="cover" transition={200} />
+                            )}
                         </FadeInUp>
                     </View>
 
@@ -918,13 +1227,15 @@ export const CyberTemplate = (props) => {
         { icon: 'flash', color: '#00E6CC', title: 'استجابة فورية', desc: 'توصيل سريع كسرعة الضوء.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#09090E' }}>
             <View style={[StyleSheet.absoluteFillObject, { opacity: 0.1 }]}>
                 {Array.from({ length: 20 }).map((_, i) => <View key={`h-${i}`} style={{ height: 1, backgroundColor: '#00E6CC', width: '100%', position: 'absolute', top: i * 50 }} />)}
                 {Array.from({ length: 10 }).map((_, i) => <View key={`v-${i}`} style={{ width: 1, backgroundColor: '#00E6CC', height: '100%', position: 'absolute', left: i * 100 }} />)}
             </View>
-            <Image source={{ uri: campaign.products?.image_url }} style={StyleSheet.absoluteFillObject} blurRadius={100} opacity={0.15} />
+            <Image source={{ uri: campaign.products?.image_url }} style={StyleSheet.absoluteFillObject} blurRadius={100} opacity={0.15} contentFit="cover" transition={200} />
 
             <Animated.ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 100 }}>
                 <View style={styles.maxContainer}>
@@ -938,7 +1249,11 @@ export const CyberTemplate = (props) => {
                         </FadeInUp>
                         <FloatingElement delay={500} duration={3000} distance={10} style={{ width: '100%', maxWidth: 700, aspectRatio: 16 / 10, marginTop: 60, zIndex: 10 }}>
                             <View style={{ flex: 1, borderRadius: 20, borderWidth: 2, borderColor: '#00E6CC', overflow: 'hidden', backgroundColor: 'rgba(0,0,0,0.5)', shadowColor: '#00E6CC', shadowOpacity: 0.5, shadowRadius: 30, elevation: 20 }}>
-                                <Image source={{ uri: campaign.products?.image_url }} style={[styles.imgFill, { opacity: 0.9 }]} resizeMode="cover" />
+                                {images.length > 1 ? (
+                                    <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} showArrows={true} />
+                                ) : (
+                                    <Image source={{ uri: images[0] }} style={[styles.imgFill, { opacity: 0.9 }]} contentFit="cover" transition={200} />
+                                )}
                                 <View style={[StyleSheet.absoluteFillObject, { backgroundColor: 'rgba(0,230,204,0.1)' }]} />
                             </View>
                         </FloatingElement>
@@ -1002,6 +1317,8 @@ export const EleganceTemplate = (props) => {
         { icon: 'gift', color: '#D4AF37', title: 'تغليف فاخر', desc: 'هدية مثالية لك ولمن تحب.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#FAF7F2' }}>
             <RotatingElement duration={30000} style={{ position: 'absolute', top: -100, right: -100, width: 500, height: 500, borderRadius: 250, borderWidth: 2, borderColor: 'rgba(212,175,55,0.1)', borderStyle: 'dashed' }} />
@@ -1022,7 +1339,11 @@ export const EleganceTemplate = (props) => {
                         <FadeInUp delay={200} style={[styles.heroImgWrap, isMobile && { width: '100%' }]}>
                             <Animated.View style={{ transform: [{ translateY: parallaxTranslate }] }}>
                                 <View style={{ width: isMobile ? 300 : 450, height: isMobile ? 400 : 600, borderRadius: 200, borderTopLeftRadius: 0, overflow: 'hidden', elevation: 15, shadowColor: '#D4AF37', shadowOpacity: 0.2, shadowRadius: 40 }}>
-                                    <Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="cover" />
+                                    {images.length > 1 ? (
+                                        <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                                    ) : (
+                                        <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+                                    )}
                                 </View>
                             </Animated.View>
                         </FadeInUp>
@@ -1086,6 +1407,8 @@ export const BeastTemplate = (props) => {
         { icon: 'car', color: '#FF3B30', title: 'توصيل لـ 58 ولاية', desc: 'شحن سريع ومضمون لأي مكان.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#000000' }}>
             <View style={{ position: 'absolute', top: 200, left: -50, width: '120%', height: 40, backgroundColor: '#FFD60A', transform: [{ rotate: '-5deg' }], opacity: 0.1, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#000', fontWeight: 'bold', letterSpacing: 10 }}>WARNING WARNING WARNING WARNING</Text></View>
@@ -1104,7 +1427,11 @@ export const BeastTemplate = (props) => {
                             </View>
                         </Pulse>
                         <FadeInUp delay={300} style={{ width: '100%', maxWidth: 800, aspectRatio: 16 / 9, borderRadius: 20, overflow: 'hidden', position: 'relative', borderWidth: 2, borderColor: '#333' }}>
-                            <Animated.Image source={{ uri: campaign.products?.image_url }} style={[styles.imgFill, { transform: [{ scale: parallaxScale }] }]} resizeMode="cover" />
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} showArrows={true} />
+                            ) : (
+                                <AnimatedExpoImage source={{ uri: images[0] }} style={[styles.imgFill, { transform: [{ scale: parallaxScale }] }]} contentFit="cover" transition={200} />
+                            )}
                             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.9)']} style={StyleSheet.absoluteFillObject} />
                         </FadeInUp>
                         <FadeInUp delay={400} style={[styles.heroButtonsRow, { justifyContent: 'center', width: '100%', maxWidth: 600, marginTop: -40, zIndex: 10 }]}>
@@ -1169,12 +1496,18 @@ export const TrendTemplate = (props) => {
         { title: 'ألوان جذابة', desc: 'تشكيلة متنوعة تناسب جميع الأذواق والمناسبات.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
             <Animated.ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 100 }}>
                 <View style={[styles.maxContainer, { paddingHorizontal: 0 }]}>
                     <View style={{ height: isMobile ? 500 : 700, width: '100%', position: 'relative' }}>
-                        <Image source={{ uri: campaign.products?.image_url }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                        {images.length > 1 ? (
+                            <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                        ) : (
+                            <Image source={{ uri: images[0] }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+                        )}
                         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFillObject} />
                         <View style={{ position: 'absolute', bottom: 60, left: 30, right: 30 }}>
                             <FadeInUp delay={100}><Text style={{ color: '#FFF', fontSize: 14, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 10 }}>New Collection</Text></FadeInUp>
@@ -1237,6 +1570,8 @@ export const AuraTemplate = (props) => {
         { icon: 'heart', title: 'مقاسات دقيقة', desc: 'متوفر بجميع المقاسات مع إمكانية التعديل.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: 'rgba(255,245,245,0.9)' }}>
             <AbstractBlob color="#FFB6C1" size={400} position={{ top: 50, right: -100 }} />
@@ -1246,7 +1581,11 @@ export const AuraTemplate = (props) => {
                         <FadeInUp delay={100}><Text style={{ color: '#D88A8A', fontSize: 20, fontStyle: 'italic', marginBottom: 20 }}>~ تألقي في مناسباتك ~</Text></FadeInUp>
                         <FadeInUp delay={200}><Text style={{ fontSize: isMobile ? 42 : 60, color: '#4A3B3B', fontFamily: 'Tajawal_800ExtraBold', textAlign: 'center', lineHeight: isMobile ? 50 : 70 }}>{config.headline || "فستان الأحلام أصبح حقيقة"}</Text></FadeInUp>
                         <FadeInUp delay={300} style={{ width: isMobile ? '90%' : 500, height: isMobile ? 500 : 700, borderRadius: 300, overflow: 'hidden', marginTop: 40, borderWidth: 5, borderColor: '#FFF', elevation: 15 }}>
-                            <Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="cover" />
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                            ) : (
+                                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+                            )}
                         </FadeInUp>
                     </View>
 
@@ -1305,6 +1644,8 @@ export const KicksTemplate = (props) => {
         { icon: 'shield', title: 'ضمان الجودة', desc: 'ضمان لمدة سنة ضد عيوب التصنيع.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#0F0F11' }}>
             <DiagonalStripes color="#2D5CFF" width={500} height={500} position={{ top: -100, right: -200 }} />
@@ -1321,7 +1662,11 @@ export const KicksTemplate = (props) => {
                             </FadeInUp>
                         </View>
                         <FloatingElement delay={400} duration={2500} distance={30} style={{ flex: 1, width: '100%', height: 400, marginTop: isMobile ? 40 : 0 }}>
-                            <Image source={{ uri: campaign.products?.image_url }} style={[styles.imgFill, { transform: [{ rotate: '-15deg' }, { scale: 1.2 }] }]} resizeMode="contain" />
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={20} showThumbnails={false} />
+                            ) : (
+                                <Image source={{ uri: images[0] }} style={[styles.imgFill, { transform: [{ rotate: '-15deg' }, { scale: 1.2 }] }]} contentFit="contain" transition={200} />
+                            )}
                         </FloatingElement>
                     </View>
 
@@ -1364,6 +1709,8 @@ export const HomeFixTemplate = (props) => {
         { icon: 'shield', title: 'ضمان طويل', desc: 'ضمان شامل لمدة عامين.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#F0F4F8' }}>
             <DottedGrid color="#0F609B" rows={6} cols={10} position={{ top: 50, left: 50 }} />
@@ -1381,7 +1728,11 @@ export const HomeFixTemplate = (props) => {
                                 </View>
                             </View>
                             <View style={{ flex: 1, minHeight: 350 }}>
-                                <Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="cover" />
+                                {images.length > 1 ? (
+                                    <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                                ) : (
+                                    <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+                                )}
                             </View>
                         </View>
                     </View>
@@ -1425,6 +1776,8 @@ export const CandyTemplate = (props) => {
         { icon: 'heart', title: 'نتائج مضمونة', desc: 'فعالية مثبتة من آلاف العملاء.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#FFF0F5' }}>
             <AbstractBlob color="#FFB6C1" size={300} position={{ top: 20, left: 20 }} />
@@ -1435,8 +1788,12 @@ export const CandyTemplate = (props) => {
                         <Pulse><View style={{ backgroundColor: '#FF69B4', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 30, marginBottom: 20 }}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>💖 جديد وحصري 💖</Text></View></Pulse>
                         <Text style={{ fontSize: isMobile ? 42 : 56, color: '#800080', fontFamily: 'Tajawal_800ExtraBold', textAlign: 'center' }}>{config.headline || "لمسة من السحر لجمالك"}</Text>
                         <Text style={{ color: '#BA55D3', fontSize: 18, textAlign: 'center', marginTop: 15 }}>{config.subheadline || "منتجك المفضل لبشرة نضرة ومشرقة."}</Text>
-                        <View style={{ width: '100%', maxWidth: 500, aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 250, marginTop: 40, padding: 20, shadowColor: '#FF69B4', shadowOpacity: 0.3, shadowRadius: 30, elevation: 15 }}>
-                            <Image source={{ uri: campaign.products?.image_url }} style={[styles.imgFill, { borderRadius: 230 }]} resizeMode="cover" />
+                        <View style={{ width: '100%', maxWidth: 500, aspectRatio: 1, backgroundColor: '#FFF', borderRadius: 250, marginTop: 40, padding: 20, shadowColor: '#FF69B4', shadowOpacity: 0.3, shadowRadius: 30, elevation: 15, overflow: 'hidden' }}>
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={250} showThumbnails={false} />
+                            ) : (
+                                <Image source={{ uri: images[0] }} style={[styles.imgFill, { borderRadius: 230 }]} contentFit="cover" transition={200} />
+                            )}
                         </View>
                     </View>
 
@@ -1495,6 +1852,8 @@ export const ActiveTemplate = (props) => {
         { icon: 'flash', title: 'نتائج سريعة', desc: 'احصل على نتائج ملحوظة بسرعة.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#121212' }}>
             <DiagonalStripes color="#CCFF00" width={800} height={800} position={{ top: -200, right: -300 }} />
@@ -1509,7 +1868,11 @@ export const ActiveTemplate = (props) => {
                             <TouchableOpacity style={[styles.secondaryBtn, { borderColor: '#CCFF00', borderRadius: 8, paddingHorizontal: 30 }]} onPress={scrollToFeatures}><Text style={[styles.secondaryBtnText, { color: '#CCFF00' }]}>الميزات</Text></TouchableOpacity>
                         </View>
                         <View style={{ width: '100%', height: 400, marginTop: 40, borderLeftWidth: 10, borderColor: '#CCFF00' }}>
-                            <Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="cover" />
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                            ) : (
+                                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+                            )}
                         </View>
                     </View>
 
@@ -1552,6 +1915,8 @@ export const CraveTemplate = (props) => {
         { icon: 'time', title: 'تحضير سريع', desc: 'جاهز في دقائق معدودة.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#FFF8F0' }}>
             <OutlinedHalfCircle color="#E65100" size={400} position={{ top: -100, left: -100 }} />
@@ -1561,8 +1926,12 @@ export const CraveTemplate = (props) => {
                         <Text style={{ fontSize: isMobile ? 48 : 64, color: '#E65100', fontFamily: 'Tajawal_800ExtraBold', textAlign: 'center' }}>{config.headline || "مذاق لا يُقاوم"}</Text>
                         <Text style={{ color: '#A86A32', fontSize: 22, marginTop: 15, textAlign: 'center' }}>{config.subheadline || "مكونات طازجة وجودة مضمونة في كل طلب."}</Text>
                         <Pulse duration={2500}>
-                            <View style={{ width: isMobile ? 300 : 450, height: isMobile ? 300 : 450, borderRadius: 250, backgroundColor: '#FFD180', marginTop: 50, justifyContent: 'center', alignItems: 'center', shadowColor: '#E65100', shadowOpacity: 0.3, shadowRadius: 30, elevation: 20 }}>
-                                <Image source={{ uri: campaign.products?.image_url }} style={{ width: '90%', height: '90%', borderRadius: 250 }} resizeMode="cover" />
+                            <View style={{ width: isMobile ? 300 : 450, height: isMobile ? 300 : 450, borderRadius: 250, backgroundColor: '#FFD180', marginTop: 50, justifyContent: 'center', alignItems: 'center', shadowColor: '#E65100', shadowOpacity: 0.3, shadowRadius: 30, elevation: 20, overflow: 'hidden' }}>
+                                {images.length > 1 ? (
+                                    <EnhancedImageCarousel images={images} height="100%" borderRadius={250} showThumbnails={false} />
+                                ) : (
+                                    <Image source={{ uri: images[0] }} style={{ width: '90%', height: '90%', borderRadius: 250 }} contentFit="cover" transition={200} />
+                                )}
                             </View>
                         </Pulse>
                         <View style={{ flexDirection: 'row', gap: 15, marginTop: 30 }}>
@@ -1610,6 +1979,8 @@ export const LumberTemplate = (props) => {
         { icon: 'construct', title: 'سهل التركيب', desc: 'تعليمات واضحة وأدوات مرفقة.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#F5F5F0' }}>
             <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -1626,7 +1997,11 @@ export const LumberTemplate = (props) => {
                         </View>
                         <View style={{ flex: 1, marginTop: isMobile ? 40 : 0 }}>
                             <View style={{ width: '100%', aspectRatio: 4 / 5, backgroundColor: '#EAEADF', padding: 20 }}>
-                                <Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="cover" />
+                                {images.length > 1 ? (
+                                    <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} />
+                                ) : (
+                                    <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
+                                )}
                             </View>
                         </View>
                     </View>
@@ -1670,6 +2045,8 @@ export const NexusTemplate = (props) => {
         { icon: 'eye', title: 'شاشة مذهلة', desc: 'جودة عرض استثنائية.' }
     ]);
 
+    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+
     return (
         <View style={{ flex: 1, backgroundColor: '#0A192F' }}>
             <DottedGrid color="#64FFDA" rows={10} cols={10} position={{ top: 100, right: 100 }} />
@@ -1679,8 +2056,12 @@ export const NexusTemplate = (props) => {
                         <Text style={{ color: '#64FFDA', fontSize: 18, fontFamily: 'Courier', marginBottom: 20 }}>&lt;NextGen_Device /&gt;</Text>
                         <Text style={{ fontSize: isMobile ? 46 : 64, color: '#CCD6F6', fontFamily: 'Tajawal_800ExtraBold', textAlign: 'center' }}>{config.headline || "قوة بين يديك"}</Text>
                         <Text style={{ color: '#8892B0', fontSize: 18, marginTop: 15, textAlign: 'center' }}>{config.subheadline || "أداء استثنائي وتصميم لا يُقاوم."}</Text>
-                        <View style={{ width: '100%', maxWidth: 700, aspectRatio: 16 / 9, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(100,255,218,0.2)', marginTop: 50, padding: 20, shadowColor: '#64FFDA', shadowOpacity: 0.2, shadowRadius: 40, elevation: 20 }}>
-                            <Image source={{ uri: campaign.products?.image_url }} style={styles.imgFill} resizeMode="contain" />
+                        <View style={{ width: '100%', maxWidth: 700, aspectRatio: 16 / 9, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(100,255,218,0.2)', marginTop: 50, padding: 20, shadowColor: '#64FFDA', shadowOpacity: 0.2, shadowRadius: 40, elevation: 20, overflow: 'hidden' }}>
+                            {images.length > 1 ? (
+                                <EnhancedImageCarousel images={images} height="100%" borderRadius={0} showThumbnails={false} showArrows={true} />
+                            ) : (
+                                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="contain" transition={200} />
+                            )}
                         </View>
                         <View style={{ flexDirection: 'row', gap: 15, marginTop: 30 }}>
                             <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#64FFDA', borderRadius: 8 }]} onPress={scrollToForm}><Text style={[styles.primaryBtnText, { color: '#0A192F' }]}>اطلب الآن</Text></TouchableOpacity>
@@ -1780,4 +2161,137 @@ const styles = StyleSheet.create({
     avatar: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
     authorName: { fontSize: 18, fontFamily: 'Tajawal_800ExtraBold', marginBottom: 6 },
     authorRole: { fontSize: 14, fontFamily: 'Tajawal_500Medium' },
+
+    // GALLERY STYLES
+    paginationDots: {
+        position: 'absolute',
+        bottom: 20,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 8,
+        zIndex: 10,
+    },
+    dot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#FFF',
+    },
+
+    // ENHANCED CAROUSEL STYLES
+    counterBadge: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        zIndex: 10,
+    },
+    counterText: {
+        color: '#FFF',
+        fontSize: 13,
+        fontFamily: 'Tajawal_700Bold',
+    },
+    gradientOverlay: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        width: 80,
+        zIndex: 5,
+    },
+    paginationContainer: {
+        position: 'absolute',
+        bottom: 16,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 10,
+    },
+    paginationDotsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    carouselDot: {
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#FFF',
+    },
+    thumbnailContainer: {
+        paddingHorizontal: 4,
+        gap: 8,
+    },
+    thumbnailWrapper: {
+        width: 60,
+        height: 60,
+        borderRadius: 8,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    thumbnailActive: {
+        borderColor: '#FFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    thumbnail: {
+        width: '100%',
+        height: '100%',
+    },
+    thumbnailOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        justifyContent: 'flex-end',
+    },
+    thumbnailActiveIndicator: {
+        height: 3,
+        backgroundColor: '#FFF',
+        width: '100%',
+    },
+    navArrow: {
+        position: 'absolute',
+        top: '50%',
+        transform: [{ translateY: -20 }],
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 15,
+    },
+    leftArrow: {
+        left: 12,
+    },
+    rightArrow: {
+        right: 12,
+    },
+    simpleDotsContainer: {
+        position: 'absolute',
+        bottom: 16,
+        left: 0,
+        right: 0,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 6,
+    },
+    simpleDot: {
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#FFF',
+    },
 });

@@ -11,6 +11,7 @@ import { ROLES } from './constants';
 
 // ─── Role → Landing Page Mapping ────────────────────────────────────────────
 export const ROLE_HOME = {
+  [ROLES.DEVELOPER]:        '/(developer)/controls',
   [ROLES.ADMIN]:            '/(admin)/dashboard',
   [ROLES.MERCHANT]:         '/(merchant)/dashboard',
   [ROLES.REGIONAL_MANAGER]: '/(regional_manager)/dashboard',
@@ -49,6 +50,7 @@ export function navigateToRoleHome(router, profile) {
 // ─── Deep-Link Allowlist (SEC-3) ────────────────────────────────────────────
 // Only internal route prefixes are allowed for deep-link navigation.
 const ALLOWED_DEEPLINK_PREFIXES = [
+  '/(developer)/',
   '/(admin)/',
   '/(merchant)/',
   '/(affiliate)/',

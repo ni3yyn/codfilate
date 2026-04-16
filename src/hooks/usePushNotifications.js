@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -16,11 +17,13 @@ function canUseExpoPush() {
 
 export function usePushRegistration(userId) {
   const tokenRef = useRef(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!userId || !canUseExpoPush()) return undefined;
 
     let cancelled = false;
+    let responseListener = { remove: () => {} };
 
     (async () => {
       try {
@@ -40,11 +43,24 @@ export function usePushRegistration(userId) {
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
             shouldShowAlert: true,
-            shouldPlaySound: false,
+            shouldPlaySound: true,
             shouldSetBadge: true,
             shouldShowBanner: true,
             shouldShowList: true,
           }),
+        });
+
+        // Deep Linking Listener
+        responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+          const data = response.notification.request.content.data;
+          if (data?.screen) {
+            // Handle parameterized navigation (e.g., /orders/[id])
+            if (data.params?.id) {
+              router.push(`/${data.screen}/${data.params.id}`);
+            } else {
+              router.push(`/${data.screen}`);
+            }
+          }
         });
 
         const { status: existing } = await Notifications.getPermissionsAsync();
@@ -85,6 +101,7 @@ export function usePushRegistration(userId) {
 
     return () => {
       cancelled = true;
+      responseListener.remove();
     };
   }, [userId]);
 }

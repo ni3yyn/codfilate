@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from './useAuthStore'; // We can import auth store to check session
+import { appConfig } from '../lib/appConfig';
+import { Platform } from 'react-native';
 
 export const useStoreStore = create((set, get) => ({
   currentStore: null,
@@ -183,26 +185,57 @@ export const useStoreStore = create((set, get) => ({
 
   uploadLogo: async (uri) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const { cloudName, uploadPreset } = appConfig.cloudinary;
+      
+      if (!cloudName || !uploadPreset) {
+        throw new Error('Cloudinary not configured. يرجى إعادة تشغيل خادم التطبيق (npm start -c) وتحديث المتصفح.');
+      }
 
-      const fileName = `${session.user.id}/logo-${Date.now()}.jpg`;
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      let fileToUpload;
+      if (Platform.OS === 'web') {
+        const responseFile = await fetch(uri);
+        fileToUpload = await responseFile.blob();
+      } else {
+        fileToUpload = {
+          uri: uri,
+          type: 'image/jpeg',
+          name: `logo-${Date.now()}.jpg`,
+        };
+      }
 
-      const { data, error } = await supabase.storage
-        .from('store-assets')
-        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+      formData.append('upload_preset', uploadPreset);
+      formData.append('folder', 'stores');
 
-      if (error) throw error;
+      const response = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Accept': 'application/json',
+            // DO NOT set Content-Type manually for FormData with fetch in React Native
+          },
+        }
+      );
+      if (__DEV__) console.log('[Cloudinary] Logo response status:', response.status);
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('store-assets')
-        .getPublicUrl(data.path);
+      const result = await response.json();
 
-      return { success: true, url: publicUrl };
+      if (result.error) {
+        if (__DEV__) console.error('[Cloudinary] Logo API Error:', result.error);
+        throw new Error(`Cloudinary Error: ${result.error.message}`);
+      }
+
+      if (__DEV__) console.log('[Cloudinary] Logo Upload Success:', result.secure_url);
+
+      // Add auto-optimization transformations
+      const optimizedUrl = result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+
+      return { success: true, url: optimizedUrl };
     } catch (error) {
-      if (__DEV__) console.error('Store uploadLogo error:', error);
+      if (__DEV__) console.error('[Cloudinary] Logo upload failed:', error);
       return { success: false, error: error.message };
     }
   },

@@ -43,6 +43,9 @@ console.log('🔵 [BOOT-11] useAlertStore loaded');
 import GlobalAlert from '../src/components/ui/GlobalAlert';
 console.log('🔵 [BOOT-12] GlobalAlert loaded');
 
+import PlatformGate from '../src/components/PlatformGate';
+console.log('🔵 [BOOT-12b] PlatformGate loaded');
+
 import { getHomeForRole } from '../src/lib/roleRouter';
 console.log('🔵 [BOOT-13] roleRouter loaded');
 
@@ -338,6 +341,7 @@ export default function RootLayout() {
       } else if (!isPublicRoute) {
         // Role-based protection: verify user belongs to the current route group
         const roleProtection = {
+          '(developer)': 'developer',
           '(admin)': 'admin',
           '(merchant)': 'merchant',
           '(regional_manager)': 'regional_manager',
@@ -418,10 +422,12 @@ export default function RootLayout() {
           <Stack.Screen name="(merchant)" />
           <Stack.Screen name="(affiliate)" />
           <Stack.Screen name="(admin)" />
+          <Stack.Screen name="(developer)" />
           <Stack.Screen name="(regional_manager)" />
           <Stack.Screen name="(delivery)" />
           <Stack.Screen name="notifications" options={{ presentation: 'modal' }} />
         </Stack>
+        <PlatformGate />
         <GlobalAlert />
       </View>
     </ErrorBoundary>

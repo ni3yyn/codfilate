@@ -7,11 +7,11 @@ import {
   Alert,
   RefreshControl,
   TouchableOpacity,
-  Image,
   Modal,
   TextInput,
   Platform,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../../src/lib/supabase";
@@ -173,7 +173,12 @@ export default function ProductApprovalsScreen() {
           >
             <View style={styles.row}>
               {item.image_url ? (
-                <Image source={{ uri: item.image_url }} style={styles.img} />
+                <Image 
+                  source={{ uri: item.image_url }} 
+                  style={styles.img} 
+                  contentFit="cover"
+                  transition={200}
+                />
               ) : (
                 <View
                   style={[

@@ -9,6 +9,7 @@ export const APP_DOMAIN = appConfig.domain;
  * أربعة أدوار: الإدارة العليا (admin)، المدير الإقليمي، التاجر، المسوق.
  */
 export const ROLES = {
+  DEVELOPER: 'developer',
   ADMIN: 'admin',
   MERCHANT: 'merchant',
   AFFILIATE: 'affiliate',

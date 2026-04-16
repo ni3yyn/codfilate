@@ -9,18 +9,20 @@ export const useCategoryStore = create((set, get) => ({
 
   // ──────────────── CATEGORIES ────────────────
 
+  /**
+   * Fetch all global categories (platform-wide).
+   * If storeId is provided, still returns all categories
+   * (since categories are now global), but the caller can
+   * filter to only those with products in their store.
+   */
   fetchCategories: async (storeId) => {
     set({ isLoading: true, error: null });
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('categories')
-        .select('*, subcategories(*)');
-
-      if (storeId) {
-        query = query.eq('store_id', storeId);
-      }
-
-      const { data, error } = await query.order('sort_order', { ascending: true });
+        .select('*, subcategories(*)')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
 
       if (error) throw error;
 
@@ -38,22 +40,51 @@ export const useCategoryStore = create((set, get) => ({
     }
   },
 
+  /**
+   * Create or find a global category using the atomic upsert RPC.
+   * Prevents duplicate categories and handles Arabic synonyms.
+   * Returns the category ID (existing or newly created).
+   */
   createCategory: async (categoryData) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .insert(categoryData)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('upsert_global_category', {
+        p_name: categoryData.name.trim(),
+        p_icon: categoryData.icon || 'grid-outline',
+      });
 
       if (error) throw error;
 
-      set((state) => ({
-        categories: [...state.categories, { ...data, subcategories: [] }],
-        isLoading: false,
-      }));
-      return { success: true, data };
+      // data is the UUID of the category (existing or new)
+      const categoryId = data;
+
+      // Fetch the full category to update local state
+      const { data: fullCat, error: fetchError } = await supabase
+        .from('categories')
+        .select('*, subcategories(*)')
+        .eq('id', categoryId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Add to local state if not already present, update if present
+      set((state) => {
+        const exists = state.categories.some((c) => c.id === categoryId);
+        if (exists) {
+          return {
+            categories: state.categories.map((c) =>
+              c.id === categoryId ? { ...c, ...fullCat } : c
+            ),
+            isLoading: false,
+          };
+        }
+        return {
+          categories: [...state.categories, fullCat],
+          isLoading: false,
+        };
+      });
+
+      return { success: true, data: fullCat, isExisting: get().categories.some(c => c.id === categoryId && c !== fullCat) };
     } catch (err) {
       if (__DEV__) console.error('[CategoryStore] createCategory error:', err);
       set({ error: err.message, isLoading: false });
@@ -127,28 +158,48 @@ export const useCategoryStore = create((set, get) => ({
 
   // ──────────────── SUBCATEGORIES ────────────────
 
+  /**
+   * Create or find a global subcategory using the atomic upsert RPC.
+   * Prevents duplicate subcategories within a category.
+   */
   createSubcategory: async (subcategoryData) => {
     set({ isLoading: true, error: null });
     try {
-      const { data, error } = await supabase
-        .from('subcategories')
-        .insert(subcategoryData)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc('upsert_global_subcategory', {
+        p_category_id: subcategoryData.category_id,
+        p_name: subcategoryData.name.trim(),
+        p_icon: subcategoryData.icon || 'ellipse-outline',
+      });
 
       if (error) throw error;
 
-      // Add to parent category's subcategories
+      const subcategoryId = data;
+
+      // Fetch the full subcategory
+      const { data: fullSub, error: fetchError } = await supabase
+        .from('subcategories')
+        .select('*')
+        .eq('id', subcategoryId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Add to parent category's subcategories if not already present
       set((state) => ({
-        categories: state.categories.map((c) =>
-          c.id === subcategoryData.category_id
-            ? { ...c, subcategories: [...(c.subcategories || []), data] }
-            : c
-        ),
-        subcategories: [...state.subcategories, data],
+        categories: state.categories.map((c) => {
+          if (c.id === subcategoryData.category_id) {
+            const exists = (c.subcategories || []).some((s) => s.id === subcategoryId);
+            if (exists) return c;
+            return { ...c, subcategories: [...(c.subcategories || []), fullSub] };
+          }
+          return c;
+        }),
+        subcategories: state.subcategories.some((s) => s.id === subcategoryId)
+          ? state.subcategories
+          : [...state.subcategories, fullSub],
         isLoading: false,
       }));
-      return { success: true, data };
+      return { success: true, data: fullSub };
     } catch (err) {
       if (__DEV__) console.error('[CategoryStore] createSubcategory error:', err);
       set({ error: err.message, isLoading: false });
@@ -208,5 +259,35 @@ export const useCategoryStore = create((set, get) => ({
       set({ error: err.message, isLoading: false });
       return { success: false, error: err.message };
     }
+  },
+
+  // ──────────────── SEARCH / AUTOCOMPLETE ────────────────
+
+  /**
+   * Search existing categories by name for autocomplete.
+   * Client-side fuzzy search over already-fetched categories.
+   */
+  searchCategories: (query) => {
+    if (!query || query.trim().length === 0) return get().categories;
+    const q = query.trim().toLowerCase();
+    return get().categories.filter((cat) =>
+      cat.name.toLowerCase().includes(q) ||
+      (cat.name_ar && cat.name_ar.toLowerCase().includes(q))
+    );
+  },
+
+  /**
+   * Search subcategories within a category for autocomplete.
+   */
+  searchSubcategories: (categoryId, query) => {
+    const cat = get().categories.find((c) => c.id === categoryId);
+    if (!cat) return [];
+    const subs = cat.subcategories || [];
+    if (!query || query.trim().length === 0) return subs;
+    const q = query.trim().toLowerCase();
+    return subs.filter((sub) =>
+      sub.name.toLowerCase().includes(q) ||
+      (sub.name_ar && sub.name_ar.toLowerCase().includes(q))
+    );
   },
 }));

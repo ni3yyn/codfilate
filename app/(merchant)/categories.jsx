@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../src/hooks/useTheme";
 import { useStoreStore } from "../../src/stores/useStoreStore";
 import { useCategoryStore } from "../../src/stores/useCategoryStore";
+import { useAlertStore } from "../../src/stores/useAlertStore";
 import UniversalHeader from "../../src/components/ui/UniversalHeader";
 import { useFAB } from "../../src/hooks/useFAB";
 import BottomSheet from "../../src/components/ui/BottomSheet";
@@ -71,6 +72,7 @@ const CATEGORY_ICONS = [
 export default function CategoriesScreen() {
   const theme = useTheme();
   const currentStore = useStoreStore((s) => s.currentStore);
+  const { showAlert } = useAlertStore();
   const {
     categories,
     isLoading,
@@ -81,6 +83,8 @@ export default function CategoriesScreen() {
     createSubcategory,
     updateSubcategory,
     deleteSubcategory,
+    searchCategories,
+    searchSubcategories,
   } = useCategoryStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -95,10 +99,22 @@ export default function CategoriesScreen() {
   const [formIcon, setFormIcon] = useState("grid-outline");
   const [saving, setSaving] = useState(false);
 
+  // Autocomplete state
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
+  // Autocomplete suggestions based on typed name
+  const suggestions = useMemo(() => {
+    if (!formName || formName.trim().length < 2 || editItem) return [];
+    if (modalMode === 'category') {
+      return searchCategories(formName).slice(0, 5);
+    } else if (parentCatId) {
+      return searchSubcategories(parentCatId, formName).slice(0, 5);
+    }
+    return [];
+  }, [formName, modalMode, parentCatId, editItem, searchCategories, searchSubcategories]);
 
   const loadData = useCallback(async () => {
-    if (currentStore) await fetchCategories(currentStore.id);
+    await fetchCategories(currentStore?.id);
   }, [currentStore]);
 
   useEffect(() => {
@@ -118,6 +134,7 @@ export default function CategoriesScreen() {
     setEditItem(null);
     setFormName("");
     setFormIcon("grid-outline");
+    setShowSuggestions(false);
     setShowModal(true);
   };
 
@@ -134,6 +151,7 @@ export default function CategoriesScreen() {
     setEditItem(cat);
     setFormName(cat.name);
     setFormIcon(cat.icon || "grid-outline");
+    setShowSuggestions(false);
     setShowModal(true);
   };
 
@@ -143,6 +161,7 @@ export default function CategoriesScreen() {
     setParentCatId(categoryId);
     setFormName("");
     setFormIcon("ellipse-outline");
+    setShowSuggestions(false);
     setShowModal(true);
   };
 
@@ -152,7 +171,20 @@ export default function CategoriesScreen() {
     setParentCatId(sub.category_id);
     setFormName(sub.name);
     setFormIcon(sub.icon || "ellipse-outline");
+    setShowSuggestions(false);
     setShowModal(true);
+  };
+
+  const handleSelectSuggestion = (suggestion) => {
+    // User selected an existing category/subcategory from autocomplete
+    setFormName(suggestion.name);
+    setFormIcon(suggestion.icon || (modalMode === 'category' ? 'grid-outline' : 'ellipse-outline'));
+    setShowSuggestions(false);
+    showAlert({
+      title: 'تصنيف موجود',
+      message: `"${suggestion.name}" موجود بالفعل في النظام وسيتم استخدامه مباشرة.`,
+      type: 'info',
+    });
   };
 
   const handleSave = async () => {
@@ -169,13 +201,18 @@ export default function CategoriesScreen() {
           icon: formIcon,
         });
       } else {
-        await createCategory({
-          store_id: currentStore.id,
+        // Uses upsert RPC — automatically finds or creates, no duplicates
+        const result = await createCategory({
           name: formName.trim(),
-          name_ar: formName.trim(),
           icon: formIcon,
-          sort_order: categories.length,
         });
+        if (result.success) {
+          showAlert({
+            title: 'تم',
+            message: 'تم إضافة التصنيف بنجاح.',
+            type: 'success',
+          });
+        }
       }
     } else {
       if (editItem) {
@@ -184,14 +221,19 @@ export default function CategoriesScreen() {
           icon: formIcon,
         });
       } else {
-        await createSubcategory({
-          store_id: currentStore.id,
+        // Uses upsert RPC — automatically finds or creates, no duplicates
+        const result = await createSubcategory({
           category_id: parentCatId,
           name: formName.trim(),
-          name_ar: formName.trim(),
           icon: formIcon,
-          sort_order: 0,
         });
+        if (result.success) {
+          showAlert({
+            title: 'تم',
+            message: 'تم إضافة التصنيف الفرعي بنجاح.',
+            type: 'success',
+          });
+        }
       }
     }
 
@@ -364,10 +406,45 @@ export default function CategoriesScreen() {
       <Input
         label="الاسم"
         value={formName}
-        onChangeText={setFormName}
+        onChangeText={(text) => {
+          setFormName(text);
+          setShowSuggestions(text.trim().length >= 2 && !editItem);
+        }}
         placeholder="مثال: ملابس، إلكترونيات..."
         icon="text-outline"
       />
+
+      {/* Autocomplete suggestions */}
+      {showSuggestions && suggestions.length > 0 && (
+        <View style={[styles.suggestionsContainer, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
+          <View style={styles.suggestionsHeader}>
+            <Ionicons name="bulb-outline" size={14} color={theme.primary} />
+            <Text style={[styles.suggestionsTitle, { color: theme.primary }]}>
+              تصنيفات موجودة مشابهة
+            </Text>
+          </View>
+          {suggestions.map((suggestion) => (
+            <TouchableOpacity
+              key={suggestion.id}
+              onPress={() => handleSelectSuggestion(suggestion)}
+              style={[styles.suggestionItem, { borderBottomColor: theme.colors.divider }]}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.suggestionIcon, { backgroundColor: theme.primary + '10' }]}>
+                <Ionicons name={suggestion.icon || 'grid-outline'} size={16} color={theme.primary} />
+              </View>
+              <Text style={[styles.suggestionName, { color: theme.colors.text }]}>
+                {suggestion.name}
+              </Text>
+              <View style={[styles.suggestionBadge, { backgroundColor: theme.primary + '15' }]}>
+                <Text style={[styles.suggestionBadgeText, { color: theme.primary }]}>
+                  استخدام
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* Icon Picker */}
       <Text
@@ -566,5 +643,55 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "transparent",
+  },
+
+  // Autocomplete suggestions
+  suggestionsContainer: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    marginTop: -spacing.xs,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  suggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  suggestionsTitle: {
+    ...typography.small,
+    fontFamily: 'Tajawal_700Bold',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 10,
+  },
+  suggestionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  suggestionName: {
+    ...typography.body,
+    flex: 1,
+    textAlign: 'right',
+  },
+  suggestionBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: borderRadius.full,
+  },
+  suggestionBadgeText: {
+    ...typography.small,
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 11,
   },
 });

@@ -56,6 +56,7 @@ export default function UniversalHeader({
   // Identity Role formatting
   const getRoleLabel = (role) => {
     switch (role) {
+      case 'developer': return 'المطوّر';
       case 'admin': return 'مدير النظام';
       case 'merchant': return 'تاجر';
       case 'affiliate': return 'مسوق';

@@ -8,8 +8,18 @@ import Constants from 'expo-constants';
 
 // Safe extraction of manifest - even if Constants is weirdly shaped
 const rawConfig = Constants?.expoConfig || Constants?.manifest2?.extra?.expoConfig || Constants?.manifest || {};
-const extraState = rawConfig?.extra || Constants?.manifest2?.extra || {};
-const customerConfig = extraState?.customerConfig || {};
+const extraState = rawConfig?.extra || Constants?.manifest2?.extra || Constants?.manifest?.extra || {};
+const customerConfig = extraState?.customerConfig || rawConfig?.customerConfig || {};
+
+if (__DEV__) {
+  console.log('DEBUG: Configuration Source Check:', {
+    hasExpoConfig: !!Constants?.expoConfig,
+    hasManifest2: !!Constants?.manifest2,
+    hasExtra: !!extraState,
+    hasCustomerConfig: !!customerConfig?.cloudName || !!customerConfig?.cloudinary
+  });
+  console.log('DEBUG: Cloudinary config found:', !!customerConfig.cloudinary?.cloudName);
+}
 
 if (!customerConfig.appName && !__DEV__) {
   console.warn('[AppConfig] Critical: No customer configuration found in manifest.');
@@ -24,7 +34,11 @@ export const appConfig = {
   domain: customerConfig.domain || 'app.com',
   logoInitial: customerConfig.theme?.logoInitial || 'A',
 
-  // Supabase
+  // Cloudinary
+  cloudinary: {
+    cloudName: customerConfig.cloudinary?.cloudName || customerConfig.cloudName || 'dss8bhhbk',
+    uploadPreset: customerConfig.cloudinary?.uploadPreset || customerConfig.uploadPreset || 'codfilate',
+  },
   supabase: {
     url: customerConfig.supabase?.url || '',
     anonKey: customerConfig.supabase?.anonKey || '',

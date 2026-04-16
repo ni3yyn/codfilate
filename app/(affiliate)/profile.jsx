@@ -9,8 +9,8 @@ import {
   Platform,
   Modal,
   Animated,
-  Image,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -22,6 +22,7 @@ import { useAuthStore } from '../../src/stores/useAuthStore';
 import { useAffiliateStore } from '../../src/stores/useAffiliateStore';
 import { useThemeStore } from '../../src/stores/useThemeStore';
 import { supabase } from '../../src/lib/supabase';
+import { appConfig } from '../../src/lib/appConfig';
 
 import Card from '../../src/components/ui/Card';
 import Button from '../../src/components/ui/Button';
@@ -165,25 +166,55 @@ export default function ProfileScreen() {
     if (!result.canceled && result.assets[0]) {
       setUploadingAvatar(true);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('Not authenticated');
-
         const uri = result.assets[0].uri;
-        const fileName = `${session.user.id}/avatar-${Date.now()}.jpg`;
-        const response = await fetch(uri);
-        const blob = await response.blob();
+        const { cloudName, uploadPreset } = appConfig.cloudinary;
+        
+        if (!cloudName || !uploadPreset) {
+          throw new Error('Cloudinary not configured');
+        }
 
-        const { data, error } = await supabase.storage
-          .from('avatars')
-          .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+        let fileToUpload;
+        if (Platform.OS === 'web') {
+          const responseFile = await fetch(uri);
+          fileToUpload = await responseFile.blob();
+        } else {
+          fileToUpload = {
+            uri: uri,
+            type: 'image/jpeg',
+            name: `avatar-${Date.now()}.jpg`,
+          };
+        }
 
-        if (error) throw error;
+        const formData = new FormData();
+        formData.append('file', fileToUpload);
+        formData.append('upload_preset', uploadPreset);
+        formData.append('folder', 'avatars');
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(data.path);
+        const cloudResponse = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Accept': 'application/json',
+              // DO NOT set Content-Type manually for FormData with fetch in React Native
+            },
+          }
+        );
 
-        const updateResult = await updateProfile({ avatar_url: publicUrl });
+        if (__DEV__) console.log('[Cloudinary] Avatar response status:', cloudResponse.status);
+
+        const cloudResult = await cloudResponse.json();
+
+        if (cloudResult.error) {
+          if (__DEV__) console.error('[Cloudinary] Avatar API Error:', cloudResult.error);
+          throw new Error(`Cloudinary Error: ${cloudResult.error.message}`);
+        }
+
+        // Add auto-optimization transformations
+        const optimizedUrl = cloudResult.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+
+        const updateResult = await updateProfile({ avatar_url: optimizedUrl });
         if (updateResult.success) {
           showAlert('نجاح', 'تم تحديث الصورة بنجاح.', 'success');
         } else {
@@ -207,7 +238,12 @@ export default function ProfileScreen() {
     return (
       <View style={[styles.avatarWrap, { width: size, height: size, borderRadius: size / 2 }]}>
         {profile?.avatar_url ? (
-          <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+          <Image 
+            source={{ uri: profile.avatar_url }} 
+            style={styles.avatarImg} 
+            contentFit="cover"
+            transition={200}
+          />
         ) : (
           <View style={[styles.avatarPlaceholder, { backgroundColor: '#FFFFFF' }]}>
             <Ionicons name="person" size={size * 0.45} color={theme.primary} />

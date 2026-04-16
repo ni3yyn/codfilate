@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../hooks/useTheme';
 import { gradients } from '../../theme/theme';
@@ -29,6 +30,8 @@ export default function Avatar({
           borderRadius: size / 2,
         },
       ]}
+      contentFit="cover"
+      transition={200}
     />
   ) : (
     <View
