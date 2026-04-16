@@ -1068,7 +1068,7 @@ export default function StoreScreen() {
             </Animated.View>
 
             {/* ──── Active Filters Bar ──── */}
-            {(activeFilterCount > 0 || debouncedSearch) && (
+            {(activeFilterCount > 0 || !!debouncedSearch) && (
               <View style={styles.activeFiltersBar}>
                 <View style={styles.activeFiltersRow}>
                   <Text style={[styles.resultsCount, { color: theme.colors.textSecondary }]}>
