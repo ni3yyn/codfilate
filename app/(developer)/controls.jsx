@@ -22,6 +22,7 @@ import { useAlertStore } from "../../src/stores/useAlertStore";
 import Card from "../../src/components/ui/Card";
 import Button from "../../src/components/ui/Button";
 import Input from "../../src/components/ui/Input";
+import SignOutButton from "../../src/components/ui/SignOutButton";
 import UniversalHeader from "../../src/components/ui/UniversalHeader";
 import CustomAlert from "../../src/components/ui/CustomAlert";
 import { typography, spacing, borderRadius, colors } from "../../src/theme/theme";
@@ -807,14 +808,7 @@ export default function DeveloperControls() {
         </Card>
 
         {/* ── Sign Out ── */}
-        <Button
-          title="تسجيل الخروج الآمن"
-          variant="secondary"
-          onPress={handleSignOut}
-          style={styles.signOutBtn}
-          textStyle={{ color: "#DC2626" }}
-          icon={<Ionicons name="log-out-outline" size={20} color="#DC2626" />}
-        />
+        <SignOutButton onPress={handleSignOut} label="تسجيل الخروج الآمن" />
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -1154,12 +1148,5 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_700Bold",
   },
 
-  // Sign out
-  signOutBtn: {
-    marginTop: spacing.xxl,
-    backgroundColor: "rgba(220, 38, 38, 0.08)",
-    borderColor: "rgba(220, 38, 38, 0.12)",
-    borderWidth: 1,
-  },
   bottomSpacer: { height: 100 },
 });

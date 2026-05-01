@@ -6,6 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -18,7 +19,7 @@ import StatCard from "../../src/components/ui/StatCard";
 import Card from "../../src/components/ui/Card";
 import UniversalHeader from "../../src/components/ui/UniversalHeader";
 import { typography, spacing, borderRadius } from "../../src/theme/theme";
-import { formatCurrency } from "../../src/lib/utils";
+import { formatCurrency, formatRelativeTime } from "../../src/lib/utils";
 import { REGIONAL_MANAGER_FEE } from "../../src/lib/constants";
 import { useResponsive } from "../../src/hooks/useResponsive";
 
@@ -63,410 +64,323 @@ export default function RegionalManagerDashboard() {
       style={[styles.root, { backgroundColor: theme.colors.background }]}
       edges={["bottom"]}
     >
-      <UniversalHeader
-        title="الرئيسية"
-        subtitle={`${wilayaIds.length} ولاية موكلة`}
-      />
+      <>
+        <UniversalHeader
+          title="الرئيسية"
+          subtitle={`${wilayaIds.length} ولاية موكلة`}
+        />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          isWide && {
-            maxWidth: maxContentWidth,
-            alignSelf: "center",
-            width: "100%",
-            paddingHorizontal: contentPadding,
-            paddingBottom: listContentBottomPad,
-          },
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Stats Grid */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-          نظرة إحصائية
-        </Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            title="طلبات معلقة"
-            value={stats.pendingOrders}
-            icon="time"
-            color="#FDCB6E"
-            subtitle="بانتظار التأكيد"
-          />
-          <StatCard
-            title="مؤكدة اليوم"
-            value={stats.confirmedToday}
-            icon="checkmark-circle"
-            color={theme.primary}
-            subtitle="تمت معالجتها"
-          />
-          <StatCard
-            title="توصيل اليوم"
-            value={stats.deliveredToday}
-            icon="checkmark-done-circle"
-            color="#2D6A4F"
-            subtitle={`هذا الشهر: ${stats.deliveredThisMonth}`}
-          />
-          <StatCard
-            title="قيد التوصيل"
-            value={stats.inTransit}
-            icon="car"
-            color="#0984E3"
-            subtitle="في الطريق"
-          />
-          <StatCard
-            title="مرتجعة"
-            value={stats.returnedOrders}
-            icon="return-down-back"
-            color="#E17055"
-          />
-          <StatCard
-            title="ملغاة"
-            value={stats.cancelledOrders}
-            icon="close-circle"
-            color="#D63031"
-          />
-          <StatCard
-            title="أرباح الشهر"
-            value={formatCurrency(stats.monthlyEarnings)}
-            icon="wallet"
-            color="#00CEC9"
-            subtitle="ربح متراكم"
-          />
-          <StatCard
-            title="إجمالي التوصيل"
-            value={stats.totalDelivered}
-            icon="trophy"
-            color="#6C5CE7"
-          />
-        </View>
-
-        {/* COD Card */}
-        <Card
-          style={styles.earningsCard}
-          accentColor="#00B894"
-          accentPosition="left"
-        >
-          <View style={styles.earningsRow}>
-            <View style={styles.earningsIconCell}>
-              <View
-                style={[styles.iconCircle, { backgroundColor: "#00B89415" }]}
-              >
-                <Ionicons name="cash-outline" size={24} color="#00B894" />
-              </View>
-              <View>
-                <Text
-                  style={[
-                    styles.earningsLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  COD محصّل
-                </Text>
-                <Text style={[styles.earningsValue, { color: "#00B894" }]}>
-                  {stats.codCollected}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.totalOrdersCell}>
-              <Text
-                style={[
-                  styles.earningsLabel,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                COD غير محصّل
-              </Text>
-              <Text style={[styles.earningsValue, { color: "#E17055" }]}>
-                {stats.codUncollected}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Earnings Info */}
-        <Card
-          style={styles.earningsCard}
-          accentColor={theme.primary}
-          accentPosition="left"
-        >
-          <View style={styles.earningsRow}>
-            <View style={styles.earningsIconCell}>
-              <View
-                style={[
-                  styles.iconCircle,
-                  { backgroundColor: theme.primary + "15" },
-                ]}
-              >
-                <Ionicons name="cash-outline" size={24} color={theme.primary} />
-              </View>
-              <View>
-                <Text
-                  style={[
-                    styles.earningsLabel,
-                    { color: theme.colors.textSecondary },
-                  ]}
-                >
-                  عمولتك لكل طلب ناجح
-                </Text>
-                <Text style={[styles.earningsValue, { color: theme.primary }]}>
-                  {formatCurrency(REGIONAL_MANAGER_FEE)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.totalOrdersCell}>
-              <Text
-                style={[
-                  styles.earningsLabel,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                إجمالي الطلبات
-              </Text>
-              <Text
-                style={[styles.earningsValue, { color: theme.colors.text }]}
-              >
-                {stats.totalOrders}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* Quick Actions */}
-        <Text
-          style={[
-            styles.sectionTitle,
-            { color: theme.colors.text, marginTop: spacing.md },
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            isWide && {
+              maxWidth: maxContentWidth,
+              alignSelf: "center",
+              width: "100%",
+              paddingHorizontal: contentPadding,
+              paddingBottom: listContentBottomPad,
+            },
           ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
+            />
+          }
+          showsVerticalScrollIndicator={false}
         >
-          إجراءات سريعة
-        </Text>
-        <Card style={styles.actionsCard}>
-          <TouchableOpacity
-            style={styles.actionItem}
-            onPress={() => router.push("/(regional_manager)/deliveries")}
-          >
-            <View
-              style={[
-                styles.actionIcon,
-                { backgroundColor: theme.primary + "15" },
-              ]}
-            >
-              <Ionicons name="car-outline" size={22} color={theme.primary} />
-            </View>
-            <Text style={[styles.actionText, { color: theme.colors.text }]}>
-              إدارة التوصيلات الإقليمية
-            </Text>
-            <Ionicons
-              name="chevron-forward"
-              size={18}
-              color={theme.colors.textTertiary}
-            />
-          </TouchableOpacity>
-        </Card>
-
-        {/* Pending Orders Preview */}
-        <View style={styles.sectionHeader}>
-          <Text
-            style={[
-              styles.sectionTitle,
-              { color: theme.colors.text, marginBottom: 0 },
-            ]}
-          >
-            طلبات قيد المراجعة
-          </Text>
-          <TouchableOpacity>
-            <Text style={[styles.viewAll, { color: theme.primary }]}>
-              عرض الكل ({pendingOrders.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {pendingOrders.length === 0 ? (
-          <Card style={styles.emptyCard}>
-            <Ionicons
-              name="checkmark-circle"
-              size={48}
-              color={theme.primary + "30"}
-            />
-            <Text
-              style={[
-                styles.emptyText,
-                { color: theme.colors.textSecondary, marginTop: 12 },
-              ]}
-            >
-              تمت معالجة جميع الطلبات بنجاح ✓
-            </Text>
-          </Card>
-        ) : (
-          pendingOrders.slice(0, 3).map((order) => (
-            <Card
-              key={order.id}
-              style={styles.orderCard}
-              borderVariant="default"
-            >
-              <View style={styles.orderHeader}>
-                <View>
-                  <Text
-                    style={[styles.orderCustomer, { color: theme.colors.text }]}
-                  >
-                    {order.customer_name}
+          {/* Hero Earnings Section */}
+          <Animated.View style={styles.heroSection}>
+            <Card style={[styles.heroCard, { backgroundColor: theme.primary }]}>
+              <View style={styles.heroContent}>
+                <View style={styles.heroText}>
+                  <Text style={styles.heroLabel}>أرباح الشهر المتراكمة</Text>
+                  <Text style={styles.heroValue}>
+                    {formatCurrency(stats.monthlyEarnings)}
                   </Text>
-                  <Text
-                    style={[
-                      styles.orderAddress,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    {order.wilaya || ""} · {order.commune || ""}
-                  </Text>
+                  <View style={styles.heroTrend}>
+                    <Ionicons name="stats-chart" size={14} color="#FFFFFF" />
+                    <Text style={styles.heroTrendText}>
+                      العمولة: {formatCurrency(REGIONAL_MANAGER_FEE)} / طلب
+                    </Text>
+                  </View>
                 </View>
-                <View
-                  style={[styles.statusBadge, { backgroundColor: "#FDCB6E15" }]}
-                >
-                  <Text style={[styles.statusText, { color: "#FDCB6E" }]}>
-                    قيد الانتظار
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.orderFooter}>
-                <Text style={[styles.orderTotal, { color: theme.primary }]}>
-                  {formatCurrency(order.sale_price || order.total)}
-                </Text>
-                <View style={styles.dateBox}>
+                <View style={styles.heroIconBox}>
                   <Ionicons
-                    name="calendar-outline"
-                    size={12}
-                    color={theme.colors.textTertiary}
-                    style={{ marginEnd: 4 }}
+                    name="wallet"
+                    size={32}
+                    color="rgba(255,255,255,0.3)"
                   />
-                  <Text
-                    style={[
-                      styles.orderDate,
-                      { color: theme.colors.textTertiary },
-                    ]}
-                  >
-                    {new Date(order.created_at).toLocaleDateString("ar-DZ")}
-                  </Text>
                 </View>
               </View>
             </Card>
-          ))
-        )}
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          </Animated.View>
+
+          {/* Primary Metrics Grid */}
+          <View style={styles.gridContainer}>
+            <StatCard
+              title="طلبات معلقة"
+              value={String(stats.pendingOrders)}
+              icon="time"
+              color="#FDCB6E"
+              animate
+            />
+            <StatCard
+              title="مؤكدة اليوم"
+              value={String(stats.confirmedToday)}
+              icon="checkmark-circle"
+              color={theme.primary}
+              animate
+            />
+            <StatCard
+              title="توصيل اليوم"
+              value={String(stats.deliveredToday)}
+              icon="airplane"
+              color="#2D6A4F"
+              animate
+            />
+            <StatCard
+              title="قيد التوصيل"
+              value={String(stats.inTransit)}
+              icon="car"
+              color="#0984E3"
+              animate
+            />
+          </View>
+
+          {/* Cash & Logistics Ribbon */}
+          <View style={styles.ribbonContainer}>
+            <View style={styles.ribbon}>
+              <View style={styles.ribbonItem}>
+                <Text style={[styles.ribbonLabel, { color: "#64748B" }]}>
+                  COD محصّل
+                </Text>
+                <Text style={[styles.ribbonVal, { color: "#2D6A4F" }]}>
+                  {stats.codCollected}
+                </Text>
+              </View>
+              <View style={styles.ribbonDivider} />
+              <View style={styles.ribbonItem}>
+                <Text style={[styles.ribbonLabel, { color: "#64748B" }]}>
+                  COD عالق
+                </Text>
+                <Text style={[styles.ribbonVal, { color: "#E17055" }]}>
+                  {stats.codUncollected}
+                </Text>
+              </View>
+              <View style={styles.ribbonDivider} />
+              <View style={styles.ribbonItem}>
+                <Text style={[styles.ribbonLabel, { color: "#64748B" }]}>
+                  مرتجعة
+                </Text>
+                <Text style={[styles.ribbonVal, { color: "#D63031" }]}>
+                  {stats.returnedOrders}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Action Center - Bento Style */}
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              مركز العمليات
+            </Text>
+          </View>
+          <View style={styles.actionBento}>
+            <TouchableOpacity
+              style={[styles.bentoBox, { backgroundColor: "#FFFFFF" }]}
+              onPress={() => router.push("/(regional_manager)/deliveries")}
+            >
+              <View
+                style={[
+                  styles.bentoIcon,
+                  { backgroundColor: theme.primary + "10" },
+                ]}
+              >
+                <Ionicons name="car" size={20} color={theme.primary} />
+              </View>
+              <Text style={[styles.bentoTitle, { color: theme.colors.text }]}>
+                إدارة التوصيلات
+              </Text>
+              <Text
+                style={[
+                  styles.bentoSubtitle,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                التحكم في المسارات
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.bentoBox, { backgroundColor: "#FFFFFF" }]}
+              onPress={() => router.push("/(regional_manager)/merchants")}
+            >
+              <View style={[styles.bentoIcon, { backgroundColor: "#6C5CE710" }]}>
+                <Ionicons name="people" size={20} color="#6C5CE7" />
+              </View>
+              <Text style={[styles.bentoTitle, { color: theme.colors.text }]}>
+                التجار النشطين
+              </Text>
+              <Text
+                style={[
+                  styles.bentoSubtitle,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                إدارة الشركاء
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Pending Activity Feed */}
+          <View style={styles.sectionHeader}>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: theme.colors.text, marginBottom: 0 },
+              ]}
+            >
+              طلبات بانتظار المراجعة
+            </Text>
+            <TouchableOpacity
+              onPress={() => router.push("/(regional_manager)/orders")}
+            >
+              <Text style={[styles.viewAll, { color: theme.primary }]}>
+                عرض الكل
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.activityFeed}>
+            {pendingOrders.length === 0 ? (
+              <View style={styles.emptyActivity}>
+                <Ionicons
+                  name="checkmark-done"
+                  size={32}
+                  color={theme.colors.textTertiary}
+                />
+                <Text
+                  style={[
+                    styles.emptyText,
+                    { color: theme.colors.textTertiary },
+                  ]}
+                >
+                  لا توجد طلبات معلقة حالياً.
+                </Text>
+              </View>
+            ) : (
+              pendingOrders.slice(0, 5).map((order, idx) => (
+                <TouchableOpacity
+                  key={order.id}
+                  onPress={() =>
+                    router.push(`/(regional_manager)/orders?id=${order.id}`)
+                  }
+                  style={[
+                    styles.activityItem,
+                    idx === Math.min(pendingOrders.length, 5) - 1 && {
+                      borderBottomWidth: 0,
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      { backgroundColor: "#FDCB6E15" },
+                    ]}
+                  >
+                    <Ionicons name="hourglass" size={18} color="#FDCB6E" />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <View style={styles.activityHeader}>
+                      <Text
+                        style={[styles.activityUser, { color: theme.colors.text }]}
+                        numberOfLines={1}
+                      >
+                        {order.customer_name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.activityPrice,
+                          { color: theme.primary },
+                        ]}
+                      >
+                        {formatCurrency(order.total)}
+                      </Text>
+                    </View>
+                    <View style={styles.activityFooter}>
+                      <Text
+                        style={[
+                          styles.activityLoc,
+                          { color: theme.colors.textSecondary },
+                        ]}
+                      >
+                        {order.wilaya} · {order.commune}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.activityTime,
+                          { color: theme.colors.textTertiary },
+                        ]}
+                      >
+                        {formatRelativeTime(order.created_at)}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { padding: spacing.md, paddingTop: spacing.sm, paddingBottom: 100 },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: { ...typography.h3, marginBottom: spacing.sm },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginVertical: spacing.md,
-  },
-  viewAll: { ...typography.small, fontFamily: "Tajawal_700Bold" },
-  earningsCard: { marginVertical: spacing.sm },
-  earningsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  earningsIconCell: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  earningsLabel: { ...typography.caption, marginBottom: 2 },
-  earningsValue: { ...typography.h3, fontSize: 18 },
-  totalOrdersCell: {
-    alignItems: "flex-end",
-  },
-  divider: {
-    width: 1,
-    height: 30,
-    backgroundColor: "rgba(0,0,0,0.05)",
-  },
-  emptyCard: {
-    alignItems: "center",
-    padding: spacing.xxl,
-    borderStyle: "dashed",
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.1)",
-  },
-  emptyText: { ...typography.body, textAlign: "center" },
-  orderCard: { marginBottom: spacing.md },
-  orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: spacing.md,
-  },
-  orderCustomer: { ...typography.bodyBold, fontSize: 16 },
-  orderAddress: { ...typography.caption, marginTop: 2 },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  statusText: { fontSize: 11, fontFamily: "Tajawal_700Bold" },
-  orderFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.03)",
-    paddingTop: spacing.sm,
-  },
-  orderTotal: { ...typography.bodyBold, fontSize: 16 },
-  dateBox: { flexDirection: "row", alignItems: "center" },
-  orderDate: { ...typography.small, fontSize: 12 },
+  scroll: { padding: spacing.md, paddingTop: spacing.sm },
+  heroSection: { marginBottom: 12 },
+  heroCard: { padding: 22, borderRadius: 24, borderVariant: 'none', shadowOpacity: 0.12 },
+  heroContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroText: { flex: 1 },
+  heroLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontFamily: 'Tajawal_500Medium' },
+  heroValue: { color: '#FFFFFF', fontSize: 30, fontFamily: 'Tajawal_800ExtraBold', marginTop: 4 },
+  heroTrend: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  heroTrendText: { color: 'rgba(255,255,255,0.95)', fontSize: 12, fontFamily: 'Tajawal_700Bold' },
+  heroIconBox: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  ribbonContainer: { marginBottom: 15 },
+  ribbon: { flexDirection: 'row', backgroundColor: '#FFFFFF', padding: 14, borderRadius: 18, alignItems: 'center', shadowOpacity: 0.04, borderWidth: 1, borderColor: '#F1F5F9' },
+  ribbonItem: { flex: 1, alignItems: 'center', gap: 2 },
+  ribbonDivider: { width: 1, height: 28, backgroundColor: '#F1F5F9' },
+  ribbonVal: { fontSize: 18, fontFamily: 'Tajawal_800ExtraBold' },
+  ribbonLabel: { fontSize: 10, fontFamily: 'Tajawal_700Bold', marginBottom: 2 },
+  sectionTitle: { ...typography.bodyBold, fontSize: 18, marginBottom: 0 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15, marginBottom: 12 },
+  viewAll: { ...typography.small, fontFamily: 'Tajawal_700Bold' },
+  actionBento: { flexDirection: 'row', gap: 12, marginBottom: 10 },
+  bentoBox: { flex: 1, padding: 16, borderRadius: 20, shadowOpacity: 0.03, borderWidth: 1, borderColor: '#F1F5F9' },
+  bentoIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  bentoTitle: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
+  bentoSubtitle: { fontSize: 11, fontFamily: 'Tajawal_500Medium', marginTop: 2 },
+  activityFeed: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 4, shadowOpacity: 0.04, borderWidth: 1, borderColor: '#F1F5F9' },
+  activityItem: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  activityIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  activityContent: { flex: 1 },
+  activityHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  activityUser: { fontSize: 15, fontFamily: 'Tajawal_700Bold', flex: 1, marginEnd: 10 },
+  activityPrice: { fontSize: 15, fontFamily: 'Tajawal_800ExtraBold' },
+  activityFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 },
+  activityLoc: { fontSize: 11, fontFamily: 'Tajawal_500Medium', flex: 1 },
+  activityTime: { fontSize: 11, fontFamily: 'Tajawal_400Regular' },
+  emptyActivity: { padding: 40, alignItems: 'center', gap: 10 },
+  emptyText: { fontSize: 13, fontFamily: 'Tajawal_500Medium' },
   bottomSpacer: { height: 60 },
-  actionsCard: {
-    padding: 0,
-    marginVertical: spacing.sm,
-    overflow: "hidden",
-  },
-  actionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: spacing.lg,
-    gap: 16,
-  },
-  actionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   actionText: {
     flex: 1,
     ...typography.bodyBold,

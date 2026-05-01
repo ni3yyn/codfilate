@@ -63,6 +63,7 @@ export default function ProfileScreen() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editCcp, setEditCcp] = useState('');
+  const [editCcpKey, setEditCcpKey] = useState('');
   const [editBaridimob, setEditBaridimob] = useState('');
   const [editFlexy, setEditFlexy] = useState('');
   const [saving, setSaving] = useState(false);
@@ -78,6 +79,7 @@ export default function ProfileScreen() {
       setEditName(profile.full_name || '');
       setEditPhone(profile.phone || '');
       setEditCcp(profile.ccp_number || '');
+      setEditCcpKey(profile.ccp_key || '');
       setEditBaridimob(profile.baridimob_number || '');
       setEditFlexy(profile.flexy_number || '');
     }
@@ -143,6 +145,7 @@ export default function ProfileScreen() {
       full_name: editName.trim(),
       phone: editPhone.trim() || null,
       ccp_number: editCcp.trim() || null,
+      ccp_key: editCcpKey.trim() || null,
       baridimob_number: editBaridimob.trim() || null,
       flexy_number: editFlexy.trim() || null,
     });
@@ -296,7 +299,14 @@ export default function ProfileScreen() {
       <View style={[styles.formDivider, { backgroundColor: theme.colors.border }]} />
       <Text style={[styles.formSectionTitle, { color: theme.colors.text }]}>معلومات الدفع والتسويات</Text>
       
-      <Input label="رقم الحساب البريدي (CCP)" value={editCcp} onChangeText={setEditCcp} placeholder="مثال: 1234567 89" icon="card-outline" style={{ textAlign: 'right' }} />
+      <View style={styles.ccpRow}>
+        <View style={{ flex: 3 }}>
+          <Input label="رقم الحساب البريدي (CCP)" value={editCcp} onChangeText={setEditCcp} placeholder="12345678" icon="card-outline" style={{ textAlign: 'right' }} />
+        </View>
+        <View style={{ flex: 1, marginEnd: spacing.sm }}>
+          <Input label="المفتاح" value={editCcpKey} onChangeText={setEditCcpKey} placeholder="XX" maxLength={2} style={{ textAlign: 'right' }} />
+        </View>
+      </View>
       <Input label="بريدي موب (BaridiMob)" value={editBaridimob} onChangeText={setEditBaridimob} placeholder="مثال: 007999990000000000" icon="phone-portrait-outline" style={{ textAlign: 'right' }} />
       <Input label="رقم الفليكسي (Flexy)" value={editFlexy} onChangeText={setEditFlexy} placeholder="رقم الهاتف لرسائل الفليكسي" keyboardType="phone-pad" icon="cellular-outline" style={{ textAlign: 'right' }} />
       
@@ -586,6 +596,7 @@ const styles = StyleSheet.create({
 
   // --- FORM OVERLAYS ---
   formContainer: { width: '100%', paddingVertical: spacing.sm, gap: spacing.xs },
+  ccpRow: { flexDirection: 'row-reverse', marginBottom: spacing.xs },
   formDivider: { height: 1, width: '100%', marginVertical: spacing.sm },
   formSectionTitle: { ...typography.small, fontFamily: 'Tajawal_700Bold', textAlign: 'right', marginBottom: spacing.sm, writingDirection: 'rtl' },
 

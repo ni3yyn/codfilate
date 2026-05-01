@@ -30,6 +30,37 @@ export const useNotificationsStore = create((set, get) => ({
     }
   },
 
+  subscribeToNotifications: (userId) => {
+    if (!userId) return () => {};
+    
+    // Initial fetch
+    get().fetchNotifications(userId);
+
+    // Use a unique channel name to avoid "already subscribed" errors if 
+    // multiple instances of UniversalHeader mount simultaneously
+    const channelId = `notifs-${userId}-${Math.random().toString(36).substring(7)}`;
+    
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        () => {
+          get().fetchNotifications(userId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  },
+
   markRead: async (id, userId) => {
     try {
       const { error } = await supabase

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -11,6 +11,13 @@ import {
   Pressable,
   BackHandler
 } from 'react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring, 
+  withTiming, 
+  runOnJS 
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '../../hooks/useTheme';
@@ -31,10 +38,31 @@ export default function Modal({
   maxWidth = 600
 }) {
   const theme = useTheme();
+  const screenHeight = Dimensions.get('window').height;
+
+  const [showModal, setShowModal] = useState(visible);
+  
+  const translateY = useSharedValue(screenHeight);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      setShowModal(true);
+      translateY.value = withSpring(0, { damping: 30, stiffness: 300, mass: 0.8 });
+      opacity.value = withTiming(1, { duration: 200 });
+    } else if (showModal) {
+      translateY.value = withSpring(screenHeight, { damping: 30, stiffness: 300, mass: 0.8 });
+      opacity.value = withTiming(0, { duration: 150 }, (finished) => {
+        if (finished) {
+          runOnJS(setShowModal)(false);
+        }
+      });
+    }
+  }, [visible]);
 
   // Explicit Hardware Back Button Handler
-  React.useEffect(() => {
-    if (!visible) return;
+  useEffect(() => {
+    if (!showModal) return;
     
     const onBackPress = () => {
       if (onClose) onClose();
@@ -43,55 +71,79 @@ export default function Modal({
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => backHandler.remove();
-  }, [visible, onClose]);
+  }, [showModal, onClose]);
+
+  const latestOnClose = useRef(onClose);
+  useEffect(() => {
+    latestOnClose.current = onClose;
+  }, [onClose]);
 
   // Web Browser Back Button Handler
-  React.useEffect(() => {
-    if (Platform.OS !== 'web' || !visible || typeof window === 'undefined') return;
+  const modalId = useRef('modal_' + Math.random().toString(36).substr(2, 9)).current;
 
-    window.history.pushState({ customModalOpen: true }, '');
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showModal || typeof window === 'undefined') return;
 
-    const onPopState = () => {
-      if (onClose) onClose();
+    window.history.pushState({ modalId }, '');
+
+    const onPopState = (e) => {
+      // Only close if our specific modal state was popped
+      if (e.state?.modalId !== modalId) {
+        if (latestOnClose.current) latestOnClose.current();
+      }
     };
 
     window.addEventListener('popstate', onPopState);
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (window.history.state?.customModalOpen) {
+      if (window.history.state?.modalId === modalId) {
         window.history.back();
       }
     };
-  }, [visible, onClose]);
+  }, [showModal]);
+
+  const overlayStyle = useAnimatedStyle(() => {
+    return {
+      opacity: opacity.value,
+    };
+  });
+
+  const modalStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+      opacity: opacity.value, // Slight fade alongside slide for the modal box
+    };
+  });
+
+  if (!showModal) return null;
 
   return (
     <RNModal
-      visible={visible}
+      visible={showModal}
       transparent
-      animationType="fade"
+      animationType="none"
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         {/* Backdrop */}
-        <Pressable 
-          style={styles.backdrop} 
-          onPress={onClose}
-        >
-          {theme.isDark ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]} />
-          )}
-        </Pressable>
+        <Animated.View style={[StyleSheet.absoluteFill, overlayStyle]}>
+          <Pressable 
+            style={styles.backdrop} 
+            onPress={onClose}
+          >
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.overlay }]} />
+          </Pressable>
+        </Animated.View>
 
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={[styles.modalWrapper, { maxWidth }]}
         >
-          <View style={[
+          <Animated.View style={[
             styles.modalContainer, 
-            { backgroundColor: theme.colors.surface }
+            { backgroundColor: theme.colors.surface },
+            modalStyle
           ]}>
             {/* Header */}
             <View style={styles.header}>
@@ -115,7 +167,7 @@ export default function Modal({
             <View style={styles.content}>
               {children}
             </View>
-          </View>
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </RNModal>
@@ -127,7 +179,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -137,9 +189,14 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   modalContainer: {
-    borderRadius: borderRadius.xl,
+    borderRadius: 32, // Premium large radius
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
     ...Platform.select({
+      web: {
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+      },
       default: shadows.lg
     })
   },
@@ -147,8 +204,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
   },
   titleGroup: {
     flex: 1,
@@ -157,21 +215,25 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h3,
     textAlign: 'right',
+    fontSize: 24,
+    fontFamily: 'Tajawal_700Bold',
   },
   subtitle: {
     ...typography.caption,
     textAlign: 'right',
-    marginTop: 2,
+    marginTop: 4,
+    opacity: 0.8,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'all 0.2s ease',
   },
   content: {
-    padding: spacing.lg,
-    paddingTop: 0,
+    padding: spacing.xl,
+    paddingTop: spacing.sm,
   },
 });

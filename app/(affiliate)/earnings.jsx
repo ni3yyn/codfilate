@@ -7,6 +7,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   Platform,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,9 +33,6 @@ import {
 } from "../../src/theme/theme";
 import { formatCurrency, formatDate } from "../../src/lib/utils";
 
-/**
- * Premium Earnings Screen — Refined layout with overflow protection and strict RTL.
- */
 export default function EarningsScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
@@ -55,14 +53,20 @@ export default function EarningsScreen() {
   } = useAffiliateStore();
 
   const [refreshing, setRefreshing] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
   const loadData = useCallback(async () => {
-    const storeId = profile?.store_id;
-    await Promise.all([
-      fetchAffiliateProfile(storeId),
-      fetchAffiliateStats(),
-      fetchCommissions(storeId),
-    ]);
+    try {
+      const storeId = profile?.store_id;
+      await fetchAffiliateProfile(storeId);
+      await fetchAffiliateStats();
+      // Fetch all commissions regardless of store to ensure "new order commission" is seen
+      await fetchCommissions(); 
+    } catch (e) {
+      if (__DEV__) console.warn('[Earnings] loadData error:', e);
+    } finally {
+      setInitialLoaded(true);
+    }
   }, [profile, fetchAffiliateProfile, fetchAffiliateStats, fetchCommissions]);
 
   useEffect(() => {
@@ -112,72 +116,57 @@ export default function EarningsScreen() {
 
   // --- RENDER DASHBOARD HERO ---
   const renderDashboardHeader = () => {
-    const TotalEarningsCard = (
-      <LinearGradient
-        colors={gradients.primary}
-        style={[styles.balanceCard, isDesktop && styles.desktopBalanceCard]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.cardCircle1} />
-        <View style={styles.cardCircle2} />
-
-        <View style={styles.balanceHeaderRow}>
-          <Ionicons
-            name="trending-up-outline"
-            size={20}
-            color="rgba(255,255,255,0.9)"
-          />
-          <Text style={styles.balanceLabel}>إجمالي الأرباح المحققة</Text>
-        </View>
-        <Text style={styles.balanceValue}>
-          {formatCurrency(stats.earnings || 0)}
-        </Text>
-        <View style={styles.balanceFooter}>
-          <Text style={styles.balanceSubtext}>
-             يتم تحديث الرصيد تلقائياً بعد توصيل الطلبيات
-          </Text>
-        </View>
-      </LinearGradient>
-    );
-
-    const statsGrid = (
-      <View style={isDesktop ? styles.desktopStatsGrid : styles.mobileStatsRow}>
-        <StatCard
-          title="قيد الانتظار"
-          value={formatCurrency(totalPending)}
-          icon="time"
-          color="#FDCB6E"
-          subtitle="عمولات معلقة"
-        />
-        <StatCard
-          title="تم سحبها"
-          value={formatCurrency(totalPaid)}
-          icon="wallet"
-          color={theme.primary}
-          subtitle="مدفوعات مستلمة"
-        />
-      </View>
-    );
-
-    if (isDesktop) {
-      return (
-        <View style={styles.desktopHeroRow}>
-          {TotalEarningsCard}
-          <View style={{ flex: 1 }}>{statsGrid}</View>
-        </View>
-      );
-    }
-
     return (
-      <View style={styles.mobileHeroContainer}>
-        {TotalEarningsCard}
-        {statsGrid}
+      <View style={styles.headerContainer}>
+        <Animated.View style={styles.heroWrapper}>
+          <LinearGradient
+            colors={gradients.primary}
+            style={styles.balanceCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.cardCircle1} />
+            <View style={styles.cardCircle2} />
+
+            <View style={styles.balanceHeaderRow}>
+              <Ionicons name="trending-up-outline" size={18} color="rgba(255,255,255,0.8)" />
+              <Text style={styles.balanceLabel}>إجمالي الأرباح المحققة</Text>
+            </View>
+            <Text style={styles.balanceValue}>
+              {formatCurrency(stats.earnings || 0)}
+            </Text>
+            <View style={styles.balanceFooter}>
+              <Text style={styles.balanceSubtext}>
+                 يتم تحديث الرصيد تلقائياً بعد توصيل الطلبيات
+              </Text>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+
+        <View style={styles.statsGrid}>
+          <StatCard
+            title="قيد الانتظار"
+            value={formatCurrency(totalPending)}
+            icon="time"
+            color="#FDCB6E"
+            animate
+          />
+          <StatCard
+            title="تم سحبها"
+            value={formatCurrency(totalPaid)}
+            icon="wallet"
+            color={theme.primary}
+            animate
+          />
+        </View>
+
+        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+          سجل العمولات
+        </Text>
       </View>
     );
   };
 
-  // --- RENDER COMMISSION LIST ITEM ---
   const renderCommission = ({ item }) => {
     const config = COMMISSION_ICONS[item.status] || COMMISSION_ICONS.pending;
 
@@ -186,25 +175,22 @@ export default function EarningsScreen() {
         style={[
           styles.commissionCard,
           isDesktop && styles.desktopCommissionCard,
-          { borderRightColor: config.color, borderRightWidth: 3 }
+          { borderLeftColor: config.color, borderLeftWidth: 3 }
         ]}
       >
         <View style={styles.commMainRow}>
-          {/* Status Icon Pillar */}
           <View style={[styles.commIconBox, { backgroundColor: config.bg }]}>
             <Ionicons name={config.icon} size={20} color={config.color} />
           </View>
 
-          {/* Central Info Column (RTL Flex-Grow) */}
           <View style={styles.commInfo}>
             <Text
               style={[styles.commType, { color: theme.colors.text }]}
               numberOfLines={1}
-              ellipsizeMode="tail"
             >
               {item.orders?.customer_name
-                ? `طلب من: ${item.orders.customer_name}`
-                : "عمولة تسويق منصة"}
+                ? `طلب: ${item.orders.customer_name}`
+                : "عمولة تسويق"}
             </Text>
             <View style={styles.commMetaRow}>
               <Ionicons name="calendar-outline" size={12} color={theme.colors.textTertiary} />
@@ -214,7 +200,6 @@ export default function EarningsScreen() {
             </View>
           </View>
 
-          {/* Value Column (Left Side Anchor) */}
           <View style={styles.commValueCol}>
             <Text style={[styles.commAmountText, { color: theme.colors.text }]}>
               {formatCurrency(item.amount)}
@@ -231,14 +216,8 @@ export default function EarningsScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={[styles.safe, { backgroundColor: theme.colors.background }]}
-      edges={["bottom"]}
-    >
-      <UniversalHeader
-        title="الأرباح"
-        subtitle="ملخص العمولات والأرباح المحققة"
-      />
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={["bottom"]}>
+      <UniversalHeader title="الأرباح" subtitle="ملخص العمولات والأرباح المحققة" />
 
       <View style={styles.centerWrapper}>
         <FlatList
@@ -249,35 +228,15 @@ export default function EarningsScreen() {
           numColumns={numColumns}
           columnWrapperStyle={isDesktop ? styles.desktopColumnWrapper : null}
           style={styles.flatListBase}
-          contentContainerStyle={[
-            styles.contentContainer,
-            { maxWidth: contentMaxWidth },
-          ]}
+          contentContainerStyle={[styles.contentContainer, { maxWidth: contentMaxWidth }]}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={theme.primary}
-            />
-          }
-          ListHeaderComponent={
-            <>
-              {renderDashboardHeader()}
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-                سجل العمولات
-              </Text>
-            </>
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+          ListHeaderComponent={renderDashboardHeader()}
           ListEmptyComponent={
-            isLoading && commissions.length === 0 ? (
+            !initialLoaded && isLoading ? (
               <LoadingSpinner message="جارٍ تحميل العمولات..." />
             ) : (
-              <EmptyState
-                icon="cash-outline"
-                title="لا توجد عمولات بعد"
-                message="ستظهر العمولات الخاصة بك هنا بمجرد إتمام عملائك للطلبات."
-              />
+              <EmptyState icon="cash-outline" title="لا توجد عمولات بعد" message="ستظهر العمولات الخاصة بك هنا بمجرد إتمام عملائك للطلبات." />
             )
           }
         />
@@ -290,141 +249,29 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   centerWrapper: { flex: 1, alignItems: "center", width: "100%" },
   flatListBase: { flex: 1, width: "100%" },
-  contentContainer: {
-    padding: spacing.md,
-    paddingBottom: 120,
-    width: "100%",
-    alignSelf: "center",
-  },
-
-  // --- HERO SECTION ---
-  desktopHeroRow: {
-    flexDirection: "row-reverse",
-    gap: spacing.lg,
-    marginBottom: spacing.xl,
-    width: "100%",
-  },
-  mobileHeroContainer: { width: "100%", marginBottom: spacing.lg },
-  desktopBalanceCard: { flex: 1.5, marginBottom: 0 },
-  desktopStatsGrid: { flex: 1, gap: spacing.md },
-  mobileStatsRow: { 
-    flexDirection: "row-reverse", 
-    gap: spacing.sm, 
-    marginTop: spacing.sm,
-    width: "100%",
-  },
-
-  balanceCard: {
-    padding: spacing.xl,
-    borderRadius: borderRadius.xl,
-    overflow: "hidden",
-    marginBottom: spacing.md,
-    ...shadows.lg,
-  },
-  cardCircle1: {
-    position: "absolute",
-    top: -40,
-    left: -40,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  cardCircle2: {
-    position: "absolute",
-    bottom: -60,
-    right: -20,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  balanceHeaderRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  balanceLabel: {
-    color: "rgba(255,255,255,0.9)",
-    fontFamily: "Tajawal_700Bold",
-    fontSize: 14,
-  },
-  balanceValue: {
-    color: "#FFFFFF",
-    fontFamily: "Tajawal_800ExtraBold",
-    fontSize: 34,
-    textAlign: "right",
-    letterSpacing: -0.5,
-  },
-  balanceFooter: {
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.15)",
-  },
-  balanceSubtext: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 12,
-    fontFamily: "Tajawal_500Medium",
-    textAlign: "right",
-  },
-
-  // --- COMMISSION CARDS ---
-  sectionTitle: {
-    ...typography.h3,
-    fontSize: 18,
-    marginVertical: spacing.md,
-    textAlign: "right",
-  },
-  desktopColumnWrapper: { gap: spacing.lg, flexDirection: "row-reverse" },
-  commissionCard: {
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.03)",
-    ...shadows.sm,
-  },
+  contentContainer: { padding: spacing.md, paddingBottom: 100, width: "100%", alignSelf: "center" },
+  headerContainer: { width: "100%", marginBottom: spacing.xs },
+  heroWrapper: { marginBottom: 12 },
+  balanceCard: { padding: 20, borderRadius: 24, overflow: "hidden", ...shadows.md },
+  cardCircle1: { position: "absolute", top: -40, left: -40, width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.12)" },
+  cardCircle2: { position: "absolute", bottom: -60, right: -20, width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(255,255,255,0.06)" },
+  balanceHeaderRow: { flexDirection: "row-reverse", alignItems: "center", gap: 6, marginBottom: 4 },
+  balanceLabel: { color: "rgba(255,255,255,0.85)", fontFamily: "Tajawal_500Medium", fontSize: 13 },
+  balanceValue: { color: "#FFFFFF", fontFamily: "Tajawal_800ExtraBold", fontSize: 32, textAlign: "right" },
+  balanceFooter: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)" },
+  balanceSubtext: { color: "rgba(255,255,255,0.8)", fontSize: 11, fontFamily: "Tajawal_500Medium", textAlign: "right" },
+  statsGrid: { flexDirection: "row-reverse", gap: 10, marginBottom: 20 },
+  sectionTitle: { ...typography.bodyBold, fontSize: 18, marginBottom: 12, textAlign: "right" },
+  desktopColumnWrapper: { gap: spacing.md, flexDirection: "row-reverse" },
+  commissionCard: { padding: 16, marginBottom: 10, borderRadius: 20, borderVariant: 'none', shadowOpacity: 0.04, borderWidth: 1, borderColor: '#F1F5F9' },
   desktopCommissionCard: { flex: 1 },
-  
-  commMainRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    width: "100%",
-  },
-  commIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginStart: spacing.md,
-  },
-  commInfo: {
-    flex: 1,
-    alignItems: "flex-end",
-  },
-  commType: {
-    fontFamily: "Tajawal_700Bold",
-    fontSize: 15,
-    marginBottom: 4,
-  },
-  commMetaRow: {
-    flexDirection: "row-reverse",
-    alignItems: "center",
-    gap: 4,
-  },
-  commMetaText: {
-    fontSize: 11,
-    fontFamily: "Tajawal_500Medium",
-  },
-  commValueCol: {
-    alignItems: "flex-start",
-    minWidth: 90,
-  },
-  commAmountText: {
-    fontFamily: "Tajawal_800ExtraBold",
-    fontSize: 16,
-    marginBottom: 4,
-  },
+  commMainRow: { flexDirection: "row-reverse", alignItems: "center", width: "100%" },
+  commIconBox: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", marginStart: 12 },
+  commInfo: { flex: 1, alignItems: "flex-end" },
+  commType: { fontFamily: "Tajawal_700Bold", fontSize: 15, marginBottom: 4 },
+  commMetaRow: { flexDirection: "row-reverse", alignItems: "center", gap: 4 },
+  commMetaText: { fontSize: 11, fontFamily: "Tajawal_500Medium" },
+  commValueCol: { alignItems: "flex-start", minWidth: 100 },
+  commAmountText: { fontFamily: "Tajawal_800ExtraBold", fontSize: 17, marginBottom: 4 },
 });
+

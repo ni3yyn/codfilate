@@ -43,6 +43,8 @@ export const useStoreStore = create((set, get) => ({
         .from('stores')
         .select('*')
         .eq('owner_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -147,7 +149,7 @@ export const useStoreStore = create((set, get) => ({
     try {
       const { data, error } = await supabase
         .from('stores')
-        .select('*, profiles(full_name, phone, avatar_url)')
+        .select('*, profiles(full_name, phone, avatar_url), wilayas(name)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -183,12 +185,12 @@ export const useStoreStore = create((set, get) => ({
     }
   },
 
-  uploadLogo: async (uri) => {
+  uploadFile: async (uri, folder = 'stores') => {
     try {
       const { cloudName, uploadPreset } = appConfig.cloudinary;
       
       if (!cloudName || !uploadPreset) {
-        throw new Error('Cloudinary not configured. يرجى إعادة تشغيل خادم التطبيق (npm start -c) وتحديث المتصفح.');
+        throw new Error('Cloudinary not configured.');
       }
 
       let fileToUpload;
@@ -196,46 +198,39 @@ export const useStoreStore = create((set, get) => ({
         const responseFile = await fetch(uri);
         fileToUpload = await responseFile.blob();
       } else {
+        const fileExt = uri.split('.').pop();
         fileToUpload = {
           uri: uri,
-          type: 'image/jpeg',
-          name: `logo-${Date.now()}.jpg`,
+          type: fileExt === 'pdf' ? 'application/pdf' : 'image/jpeg',
+          name: `${folder}-${Date.now()}.${fileExt}`,
         };
       }
 
       const formData = new FormData();
       formData.append('file', fileToUpload);
       formData.append('upload_preset', uploadPreset);
-      formData.append('folder', 'stores');
+      formData.append('folder', folder);
 
       const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
         {
           method: 'POST',
           body: formData,
-          headers: {
-            'Accept': 'application/json',
-            // DO NOT set Content-Type manually for FormData with fetch in React Native
-          },
+          headers: { 'Accept': 'application/json' },
         }
       );
-      if (__DEV__) console.log('[Cloudinary] Logo response status:', response.status);
 
       const result = await response.json();
+      if (result.error) throw new Error(result.error.message);
 
-      if (result.error) {
-        if (__DEV__) console.error('[Cloudinary] Logo API Error:', result.error);
-        throw new Error(`Cloudinary Error: ${result.error.message}`);
+      let finalUrl = result.secure_url;
+      if (result.resource_type === 'image') {
+        finalUrl = finalUrl.replace('/upload/', '/upload/f_auto,q_auto/');
       }
 
-      if (__DEV__) console.log('[Cloudinary] Logo Upload Success:', result.secure_url);
-
-      // Add auto-optimization transformations
-      const optimizedUrl = result.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
-
-      return { success: true, url: optimizedUrl };
+      return { success: true, url: finalUrl };
     } catch (error) {
-      if (__DEV__) console.error('[Cloudinary] Logo upload failed:', error);
+      if (__DEV__) console.error('[Cloudinary] Upload failed:', error);
       return { success: false, error: error.message };
     }
   },

@@ -34,6 +34,7 @@ export default function ManageDeliveries() {
     deliveries,
     fetchManagerDeliveries,
     updateOrderLifecycleStatus,
+    confirmCodCollected,
     isLoading,
   } = useRegionalManagerStore();
   const { showAlert } = useAlertStore();
@@ -54,6 +55,22 @@ export default function ManageDeliveries() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const handleConfirmCod = async (orderId) => {
+    const res = await confirmCodCollected(orderId);
+    if (res.success) {
+      if (Platform.OS !== "web")
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert({
+        title: "تم التحصيل",
+        message: "تم تأكيد استلام المبلغ المالي بنجاح.",
+        type: "success",
+      });
+      await loadData();
+    } else {
+      showAlert({ title: "خطأ", message: res.error, type: "destructive" });
+    }
   };
 
   const handleStatusUpdate = async (orderId, nextStatus) => {
@@ -102,9 +119,20 @@ export default function ManageDeliveries() {
         </View>
 
         <View style={styles.cardDetails}>
-          <Text style={[styles.totalAmount, { color: theme.primary }]}>
-            {formatCurrency(item.orders?.sale_price || 0)}
-          </Text>
+          <View style={styles.priceRow}>
+            <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>المنتج:</Text>
+            <Text style={[styles.detailValue, { color: theme.colors.textSecondary }]}>{formatCurrency(item.orders?.sale_price || 0)}</Text>
+          </View>
+          <View style={styles.priceRow}>
+            <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>التوصيل:</Text>
+            <Text style={[styles.detailValue, { color: '#00CEC9' }]}>+{formatCurrency(item.orders?.delivery_fee || 0)}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text style={[styles.detailTotalLabel, { color: theme.colors.text }]}>التحصيل:</Text>
+            <Text style={[styles.totalAmount, { color: theme.primary }]}>
+              {formatCurrency(item.orders?.total || 0)}
+            </Text>
+          </View>
           <View style={styles.dateBox}>
             <Ionicons
               name="calendar-outline"
@@ -145,6 +173,24 @@ export default function ManageDeliveries() {
               >
                 <Text style={styles.returnBtnText}>إرجاع</Text>
               </TouchableOpacity>
+            </View>
+          )}
+          {status === "delivered" && (
+            <View style={{ flex: 1 }}>
+              {item.orders?.cod_confirmed_at ? (
+                <View style={styles.collectedBadge}>
+                  <Ionicons name="cash-outline" size={16} color="#2D6A4F" />
+                  <Text style={styles.collectedText}>تم تحصيل المبلغ</Text>
+                </View>
+              ) : (
+                <Button
+                  title="💰 تأكيد تحصيل المبلغ"
+                  onPress={() => handleConfirmCod(item.order_id)}
+                  size="small"
+                  variant="outline"
+                  style={{ borderColor: theme.primary }}
+                />
+              )}
             </View>
           )}
         </View>
@@ -297,13 +343,19 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 11, fontFamily: "Tajawal_700Bold" },
   cardDetails: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
     marginBottom: spacing.md,
+    gap: 4
   },
-  totalAmount: { ...typography.bodyBold, fontSize: 17 },
-  dateBox: { flexDirection: "row", alignItems: "center", gap: 4 },
+  priceRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  totalRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)', paddingTop: 6, marginTop: 4 },
+  detailLabel: { fontSize: 13, fontFamily: "Tajawal_500Medium" },
+  detailValue: { fontSize: 13, fontFamily: "Tajawal_700Bold" },
+  detailTotalLabel: { fontSize: 14, fontFamily: "Tajawal_700Bold" },
+  totalAmount: { ...typography.bodyBold, fontSize: 16 },
+  dateBox: { flexDirection: "row-reverse", alignItems: "center", gap: 4, marginTop: 8 },
   dateText: { fontSize: 12, fontFamily: "Tajawal_500Medium" },
   actionRow: {
     flexDirection: "row",
@@ -335,4 +387,18 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   errorText: { ...typography.small, flex: 1 },
+  collectedBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    backgroundColor: "rgba(45, 106, 79, 0.1)",
+    borderRadius: borderRadius.sm,
+  },
+  collectedText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_700Bold",
+    color: "#2D6A4F",
+  },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,21 +11,37 @@ import {
   Alert,
   ScrollView,
   Linking,
+  Platform,
+  UIManager,
+  LayoutAnimation,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+
+// Hooks & Stores
 import { useTheme } from '../../src/hooks/useTheme';
+import { useResponsive } from '../../src/hooks/useResponsive';
 import { useStoreStore } from '../../src/stores/useStoreStore';
 import { useOrderStore } from '../../src/stores/useOrderStore';
+
+// UI Components
 import Card from '../../src/components/ui/Card';
 import Badge from '../../src/components/ui/Badge';
 import EmptyState from '../../src/components/ui/EmptyState';
 import LoadingSpinner from '../../src/components/ui/LoadingSpinner';
 import UniversalHeader from '../../src/components/ui/UniversalHeader';
+
+// Utils & Theme
 import { typography, spacing, borderRadius } from '../../src/theme/theme';
 import { formatCurrency, formatRelativeTime, formatDate } from '../../src/lib/utils';
 import { ORDER_STATUS_AR } from '../../src/lib/constants';
 
+// Enable LayoutAnimation for Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// --- Configuration ---
 const STATUS_FILTERS = [
   { key: null, label: 'الكل', icon: 'list' },
   { key: 'pending', label: 'معلقة', icon: 'time-outline' },
@@ -45,10 +61,142 @@ const STATUS_CONFIG = {
   cancelled: { variant: 'error', color: '#828282', icon: 'close-circle' },
 };
 
+// --- Extracted Memoized Order Card (Massive Performance Boost) ---
+const OrderCard = React.memo(({ item, isExpanded, onToggle, theme, isWide }) => {
+  const config = STATUS_CONFIG[item.status] || { color: theme.colors.textSecondary, icon: 'receipt' };
+  const affiliateName = item.affiliates?.profiles?.full_name;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={() => onToggle(item.id)}
+      style={isWide ? styles.cardWrapperWide : styles.cardWrapperMobile}
+    >
+      <Card style={[styles.orderCard, isExpanded && styles.expandedCard]}>
+        {/* Status Accent Line */}
+        <View style={[styles.statusAccent, { backgroundColor: config.color }]} />
+
+        <View style={styles.cardMain}>
+          <View style={styles.cardHeader}>
+            <View style={styles.customerInfoSection}>
+              <Text style={[styles.customerName, { color: theme.colors.text }]} numberOfLines={1}>
+                {item.customer_name}
+              </Text>
+              <View style={styles.locationRow}>
+                <Ionicons name="location-sharp" size={14} color={theme.colors.textTertiary} />
+                <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
+                  {item.wilaya || 'غير محدد'} • {item.commune || ''}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.priceTag, { backgroundColor: theme.primary + '15' }]}>
+              <Text style={[styles.priceText, { color: theme.primary }]}>
+                {formatCurrency(item.total)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.middleRow}>
+            <View style={styles.timeBadge}>
+              <Ionicons name="time-outline" size={14} color={theme.colors.textTertiary} />
+              <Text style={[styles.timeText, { color: theme.colors.textTertiary }]}>
+                {formatRelativeTime(item.created_at)}
+              </Text>
+            </View>
+            <Badge
+              label={ORDER_STATUS_AR[item.status] || item.status}
+              variant={config.variant}
+              style={styles.statusBadge}
+            />
+          </View>
+
+          <View style={[styles.actionStrip, { borderTopColor: theme.colors.divider }]}>
+            <TouchableOpacity
+              style={[styles.quickCall, { backgroundColor: '#27AE6015' }]}
+              onPress={() => Linking.openURL(`tel:${item.customer_phone}`)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="call" size={14} color="#27AE60" />
+              <Text style={[styles.quickCallText, { color: '#27AE60' }]}>{item.customer_phone}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.tagsContainer}>
+              {!!affiliateName && (
+                <View style={[styles.miniTag, { backgroundColor: theme.colors.surface2 }]}>
+                  <Ionicons name="person-outline" size={12} color={theme.colors.textSecondary} />
+                  <Text numberOfLines={1} style={[styles.miniTagText, { color: theme.colors.textSecondary }]}>
+                    {affiliateName}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+          {/* Expanded Section with Smooth Reveal */}
+          {isExpanded && (
+            <View style={[styles.detailsSection, { borderTopColor: theme.colors.divider }]}>
+              <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>تفاصيل المنتجات</Text>
+
+              {item.order_items?.map((oi, idx) => (
+                <View key={idx} style={styles.itemRow}>
+                  <View style={styles.itemMain}>
+                    <Text style={[styles.itemName, { color: theme.colors.text }]}>{oi.product_name}</Text>
+                    <Text style={[styles.itemQty, { color: theme.colors.textTertiary }]}>الكمية: {oi.quantity}</Text>
+                  </View>
+                  <Text style={[styles.itemPrice, { color: theme.colors.text }]}>{formatCurrency(oi.unit_price)}</Text>
+                </View>
+              ))}
+
+              {!!item.customer_address && (
+                <View style={[styles.detailBox, { backgroundColor: theme.colors.surface2 }]}>
+                  <Ionicons name="map-outline" size={16} color={theme.colors.textSecondary} />
+                  <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>{item.customer_address}</Text>
+                </View>
+              )}
+
+              {!!item.notes && (
+                <View style={[styles.detailBox, { backgroundColor: theme.colors.warning + '15' }]}>
+                  <Ionicons name="document-text-outline" size={16} color={theme.colors.warning} />
+                  <Text style={[styles.detailText, { color: theme.colors.warning, fontStyle: 'italic' }]}>{item.notes}</Text>
+                </View>
+              )}
+
+              <View style={styles.footerActions}>
+                <TouchableOpacity
+                  style={[styles.shareBtn, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface }]}
+                  onPress={() => {
+                    const trackingUrl = `https://codfilatepromo.web.app/track/${item.id}`;
+                    Clipboard.setString(trackingUrl);
+                    Alert.alert('تم النسخ', 'تم نسخ رابط التتبع بنجاح.');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="copy-outline" size={16} color={theme.colors.textSecondary} />
+                  <Text style={[styles.shareBtnText, { color: theme.colors.textSecondary }]}>نسخ رابط التتبع</Text>
+                </TouchableOpacity>
+                <View style={styles.dateLabel}>
+                  <Text style={[styles.dateLabelText, { color: theme.colors.textTertiary }]}>
+                    بتاريخ: {formatDate(item.created_at)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+        </View>
+      </Card>
+    </TouchableOpacity>
+  );
+});
+
+// --- Main Component ---
 export default function OrdersScreen() {
   const theme = useTheme();
+  const { isWide } = useResponsive();
+
   const currentStore = useStoreStore((s) => s.currentStore);
   const { orders, isLoading, fetchOrders } = useOrderStore();
+
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
   const [expandedOrder, setExpandedOrder] = useState(null);
@@ -56,11 +204,11 @@ export default function OrdersScreen() {
 
   const loadOrders = useCallback(async () => {
     if (currentStore) await fetchOrders(currentStore.id, activeFilter);
-  }, [currentStore, activeFilter]);
+  }, [currentStore, activeFilter, fetchOrders]);
 
   useEffect(() => {
     loadOrders();
-  }, [activeFilter, currentStore]);
+  }, [loadOrders]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -68,266 +216,200 @@ export default function OrdersScreen() {
     setRefreshing(false);
   };
 
-  const filteredOrders = orders.filter((o) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const affiliateName = o.affiliates?.profiles?.full_name || '';
-    return (
-      (o.customer_name || '').toLowerCase().includes(q) ||
-      (o.customer_phone || '').includes(q) ||
-      (o.referral_code || '').toLowerCase().includes(q) ||
-      affiliateName.toLowerCase().includes(q)
-    );
-  });
+  // Smooth accordion toggle using LayoutAnimation
+  const handleToggleOrder = useCallback((id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedOrder((prev) => (prev === id ? null : id));
+  }, []);
 
-  const stats = {
+  // Filter logic memoized
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      const affiliateName = o.affiliates?.profiles?.full_name || '';
+      return (
+        (o.customer_name || '').toLowerCase().includes(q) ||
+        (o.customer_phone || '').includes(q) ||
+        (o.referral_code || '').toLowerCase().includes(q) ||
+        affiliateName.toLowerCase().includes(q)
+      );
+    });
+  }, [orders, search]);
+
+  // Derived Stats
+  const stats = useMemo(() => ({
     total: orders.length,
     pending: orders.filter((o) => o.status === 'pending').length,
     delivered: orders.filter((o) => o.status === 'delivered').length,
-  };
+  }), [orders]);
 
-  const renderOrder = ({ item }) => {
-    const isExpanded = expandedOrder === item.id;
-    const config = STATUS_CONFIG[item.status] || { color: theme.colors.textSecondary, icon: 'receipt' };
-    const affiliateName = item.affiliates?.profiles?.full_name;
-
-    return (
-      <TouchableOpacity 
-        activeOpacity={0.9} 
-        onPress={() => setExpandedOrder(isExpanded ? null : item.id)}
-      >
-        <Card style={[styles.orderCard, isExpanded && styles.expandedCard]}>
-          {/* Status Accent Line */}
-          <View style={[styles.statusAccent, { backgroundColor: config.color }]} />
-
-          <View style={styles.cardMain}>
-            <View style={styles.cardHeader}>
-              <View style={styles.customerInfoSection}>
-                <Text style={[styles.customerName, { color: theme.colors.text }]}>
-                  {item.customer_name}
-                </Text>
-                <View style={styles.locationRow}>
-                  <Ionicons name="location-sharp" size={12} color={theme.colors.textTertiary} />
-                  <Text style={[styles.metaText, { color: theme.colors.textSecondary }]}>
-                    {item.wilaya || 'غير محدد'} • {item.commune || ''}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.priceTag, { backgroundColor: theme.primary + '10' }]}>
-                <Text style={[styles.priceText, { color: theme.primary }]}>
-                  {formatCurrency(item.total)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.middleRow}>
-                <View style={styles.timeBadge}>
-                    <Ionicons name="time-outline" size={12} color={theme.colors.textTertiary} />
-                    <Text style={[styles.timeText, { color: theme.colors.textTertiary }]}>
-                        {formatRelativeTime(item.created_at)}
-                    </Text>
-                </View>
-                <Badge
-                    label={ORDER_STATUS_AR[item.status] || item.status}
-                    variant={config.variant}
-                    style={styles.statusBadge}
-                />
-            </View>
-
-            <View style={styles.actionStrip}>
-                <TouchableOpacity 
-                    style={[styles.quickCall, { backgroundColor: '#27AE6015' }]}
-                    onPress={() => Linking.openURL(`tel:${item.customer_phone}`)}
-                >
-                    <Ionicons name="call" size={14} color="#27AE60" />
-                    <Text style={[styles.quickCallText, { color: '#27AE60' }]}>{item.customer_phone}</Text>
-                </TouchableOpacity>
-                
-                <View style={styles.tagsContainer}>
-                   {!!affiliateName && (
-                     <View style={styles.miniTag}>
-                        <Ionicons name="person-outline" size={10} color={theme.colors.textSecondary} />
-                        <Text numberOfLines={1} style={[styles.miniTagText, { color: theme.colors.textSecondary }]}>{affiliateName}</Text>
-                     </View>
-                   )}
-                </View>
-            </View>
-
-            {isExpanded && (
-              <View style={[styles.detailsSection, { borderTopColor: theme.colors.border }]}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>تفاصيل المنتجات</Text>
-                
-                {item.order_items?.map((oi, idx) => (
-                  <View key={idx} style={styles.itemRow}>
-                    <View style={styles.itemMain}>
-                        <Text style={[styles.itemName, { color: theme.colors.text }]}>{oi.product_name}</Text>
-                        <Text style={[styles.itemQty, { color: theme.colors.textTertiary }]}>الكمية: {oi.quantity}</Text>
-                    </View>
-                    <Text style={[styles.itemPrice, { color: theme.colors.text }]}>{formatCurrency(oi.unit_price)}</Text>
-                  </View>
-                ))}
-
-                {!!item.customer_address && (
-                  <View style={styles.detailBox}>
-                    <Ionicons name="map-outline" size={14} color={theme.colors.textSecondary} />
-                    <Text style={[styles.detailText, { color: theme.colors.textSecondary }]}>{item.customer_address}</Text>
-                  </View>
-                )}
-
-                {!!item.notes && (
-                  <View style={[styles.detailBox, { backgroundColor: theme.colors.shimmer }]}>
-                    <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} />
-                    <Text style={[styles.detailText, { color: theme.colors.textSecondary, fontStyle: 'italic' }]}>{item.notes}</Text>
-                  </View>
-                )}
-
-                <View style={styles.footerActions}>
-                    <TouchableOpacity
-                        style={[styles.shareBtn, { borderColor: theme.colors.border }]}
-                        onPress={() => {
-                            const trackingUrl = `https://codfilatepromo.web.app/track/${item.id}`;
-                            Clipboard.setString(trackingUrl);
-                            Alert.alert('تم النسخ', 'تم نسخ رابط التتبع.');
-                        }}
-                    >
-                        <Ionicons name="copy-outline" size={16} color={theme.colors.textSecondary} />
-                        <Text style={[styles.shareBtnText, { color: theme.colors.textSecondary }]}>نسخ رابط التتبع</Text>
-                    </TouchableOpacity>
-                    <View style={styles.dateLabel}>
-                         <Text style={[styles.dateLabelText, { color: theme.colors.textTertiary }]}>بتاريخ: {formatDate(item.created_at)}</Text>
-                    </View>
-                </View>
-              </View>
-            )}
-          </View>
-        </Card>
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = useCallback(({ item }) => (
+    <OrderCard
+      item={item}
+      isExpanded={expandedOrder === item.id}
+      onToggle={handleToggleOrder}
+      theme={theme}
+      isWide={isWide}
+    />
+  ), [expandedOrder, handleToggleOrder, theme, isWide]);
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader title="الطلبات" />
+      <UniversalHeader title="الطلبات" subtitle="متابعة وإدارة حالة الطلبات الخاصة بمتجرك" />
 
-      {/* Quick Summary Section */}
-      <View style={styles.statsRow}>
-        <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.statValue, { color: theme.colors.text }]}>{stats.total}</Text>
-            <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>الكل</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#F2994A15' }]}>
-            <Text style={[styles.statValue, { color: '#F2994A' }]}>{stats.pending}</Text>
-            <Text style={[styles.statLabel, { color: '#F2994A' }]}>معلق</Text>
-        </View>
-        <View style={[styles.statCard, { backgroundColor: '#21965315' }]}>
-            <Text style={[styles.statValue, { color: '#219653' }]}>{stats.delivered}</Text>
-            <Text style={[styles.statLabel, { color: '#219653' }]}>تم التوصيل</Text>
-        </View>
-      </View>
+      {/* Main Container constrained for desktop */}
+      <View style={[styles.contentWrapper, isWide && styles.contentWrapperWide]}>
 
-      {/* Search Input */}
-      <View style={[styles.searchWrapper, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-        <Ionicons name="search" size={18} color={theme.colors.textTertiary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.colors.text }]}
-          placeholder="بحث بالاسم أو الهاتف..."
-          placeholderTextColor={theme.colors.textTertiary}
-          value={search}
-          onChangeText={setSearch}
-        />
-        {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch('')}>
-            <Ionicons name="close-circle" size={18} color={theme.colors.textTertiary} />
-          </TouchableOpacity>
+        {/* Quick Summary Dashboard */}
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
+            <Ionicons name="layers-outline" size={20} color={theme.colors.textSecondary} style={styles.statIcon} />
+            <View style={styles.statTextWrap}>
+              <Text style={[styles.statValue, { color: theme.colors.text }]}>{stats.total}</Text>
+              <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>الكل</Text>
+            </View>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: '#F2994A15' }]}>
+            <Ionicons name="time-outline" size={20} color="#F2994A" style={styles.statIcon} />
+            <View style={styles.statTextWrap}>
+              <Text style={[styles.statValue, { color: '#F2994A' }]}>{stats.pending}</Text>
+              <Text style={[styles.statLabel, { color: '#F2994A' }]}>معلق</Text>
+            </View>
+          </View>
+          <View style={[styles.statCard, { backgroundColor: '#21965315' }]}>
+            <Ionicons name="checkmark-done-outline" size={20} color="#219653" style={styles.statIcon} />
+            <View style={styles.statTextWrap}>
+              <Text style={[styles.statValue, { color: '#219653' }]}>{stats.delivered}</Text>
+              <Text style={[styles.statLabel, { color: '#219653' }]}>تم التوصيل</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Smart Search Bar */}
+        <View style={[
+          styles.searchWrapper,
+          { backgroundColor: theme.colors.surface, borderColor: search ? theme.primary : theme.colors.border }
+        ]}>
+          <Ionicons name="search" size={20} color={search ? theme.primary : theme.colors.textTertiary} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.colors.text }]}
+            placeholder="ابحث بالاسم، رقم الهاتف، أو المسوق..."
+            placeholderTextColor={theme.colors.textTertiary}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} activeOpacity={0.6}>
+              <Ionicons name="close-circle" size={20} color={theme.colors.textTertiary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Horizontal Status Filters */}
+        <View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterScroll}
+          >
+            {STATUS_FILTERS.map((f) => {
+              const isSelected = activeFilter === f.key;
+              return (
+                <TouchableOpacity
+                  key={f.key || 'all'}
+                  onPress={() => setActiveFilter(f.key)}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.filterPill,
+                    {
+                      backgroundColor: isSelected ? theme.primary : theme.colors.surface,
+                      borderColor: isSelected ? theme.primary : theme.colors.border
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={f.icon}
+                    size={16}
+                    color={isSelected ? '#FFF' : theme.colors.textSecondary}
+                    style={{ marginStart: 6 }} // Arabic RTL spacing
+                  />
+                  <Text style={[styles.filterLabel, { color: isSelected ? '#FFF' : theme.colors.textSecondary }]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Main Orders List/Grid */}
+        {isLoading && orders.length === 0 ? (
+          <LoadingSpinner />
+        ) : (
+          <FlatList
+            key={isWide ? 'grid' : 'list'} // Forces remount when layout changes so numColumns applies cleanly
+            data={filteredOrders}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            numColumns={isWide ? 2 : 1}
+            columnWrapperStyle={isWide ? styles.gridRow : undefined}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+            ListEmptyComponent={
+              <EmptyState
+                icon="receipt-outline"
+                title="لا توجد طلبات"
+                message={search ? "لا توجد طلبات تطابق بحثك الحالي" : "لا توجد طلبات في هذا القسم حالياً"}
+              />
+            }
+          />
         )}
       </View>
-
-      {/* Status Filter Tabs */}
-      <View>
-        <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            contentContainerStyle={styles.filterScroll}
-        >
-          {STATUS_FILTERS.map((f) => {
-            const isSelected = activeFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key || 'all'}
-                onPress={() => setActiveFilter(f.key)}
-                style={[
-                  styles.filterPill,
-                  { 
-                    backgroundColor: isSelected ? theme.primary : theme.colors.surface,
-                    borderColor: isSelected ? theme.primary : theme.colors.border 
-                  },
-                ]}
-              >
-                <Ionicons 
-                    name={f.icon} 
-                    size={14} 
-                    color={isSelected ? '#FFF' : theme.colors.textSecondary} 
-                    style={{ marginEnd: 4 }}
-                />
-                <Text style={[styles.filterLabel, { color: isSelected ? '#FFF' : theme.colors.textSecondary }]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {isLoading && orders.length === 0 ? (
-        <LoadingSpinner />
-      ) : (
-        <FlatList
-          data={filteredOrders}
-          renderItem={renderOrder}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-          ListEmptyComponent={
-            <EmptyState
-              icon="receipt-outline"
-              title="لا توجد طلبات"
-              message="لا توجد طلبات في هذا القسم حالياً"
-            />
-          }
-        />
-      )}
     </SafeAreaView>
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  contentWrapper: { flex: 1 },
+  contentWrapperWide: { maxWidth: 1200, width: '100%', alignSelf: 'center' },
+
+  // Dashboard Stats
   statsRow: {
     flexDirection: 'row-reverse',
     paddingHorizontal: spacing.md,
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   statCard: {
     flex: 1,
-    marginTop: spacing.sm,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
     padding: spacing.sm,
     borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  statValue: { ...typography.h3, lineHeight: 24 },
-  statLabel: { ...typography.small, fontSize: 10, fontFamily: 'Tajawal_700Bold' },
+  statIcon: { marginEnd: spacing.sm },
+  statTextWrap: { flex: 1, alignItems: 'flex-start' }, // Right aligned conceptually due to row-reverse
+  statValue: { ...typography.h3, fontFamily: 'Tajawal_700Bold', lineHeight: 28 },
+  statLabel: { ...typography.caption, fontFamily: 'Tajawal_500Medium' },
 
+  // Search Bar
   searchWrapper: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     marginHorizontal: spacing.md,
     paddingHorizontal: spacing.md,
-    height: 46,
+    height: 50,
     borderRadius: borderRadius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     marginBottom: spacing.sm,
   },
   searchInput: {
@@ -335,149 +417,132 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     paddingHorizontal: spacing.sm,
     ...typography.body,
+    fontFamily: 'Tajawal_500Medium',
   },
 
+  // Filters
   filterScroll: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
-    gap: spacing.xs,
+    gap: spacing.sm,
     flexDirection: 'row-reverse',
   },
   filterPill: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: borderRadius.full,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   filterLabel: { ...typography.small, fontFamily: 'Tajawal_700Bold' },
 
+  // FlatList Content
   listContent: {
     padding: spacing.md,
     paddingTop: 0,
-    paddingBottom: 100,
+    paddingBottom: 120,
+  },
+  gridRow: {
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
 
+  // Order Card Container
+  cardWrapperMobile: { width: '100%', marginBottom: spacing.sm },
+  cardWrapperWide: { flex: 1, maxWidth: '49%', marginBottom: spacing.md },
+
   orderCard: {
-    marginBottom: spacing.sm,
     padding: 0,
     overflow: 'hidden',
     borderWidth: 0,
-    elevation: 2,
+    elevation: 3,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
+    shadowRadius: 5,
   },
   expandedCard: {
-    elevation: 4,
-    transform: [{ scale: 1.01 }],
+    elevation: 6,
+    shadowOpacity: 0.15,
   },
   statusAccent: {
-    width: 4,
+    width: 5,
     position: 'absolute',
-    left: 0,
+    right: 0, // Mirrored to right for RTL compliance
     top: 0,
     bottom: 0,
   },
   cardMain: {
     padding: spacing.md,
-    paddingLeft: spacing.md + 4,
+    paddingRight: spacing.md + 6, // Offset for the accent line
   },
+
+  // Card Header (Name & Price)
   cardHeader: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  customerInfoSection: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
+  customerInfoSection: { flex: 1, alignItems: 'flex-end' },
   customerName: {
-    ...typography.bodyBold,
-    fontSize: 16,
-    marginBottom: 2,
+    ...typography.h4,
+    fontFamily: 'Tajawal_700Bold',
+    marginBottom: 4,
   },
-  locationRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    ...typography.small,
-    fontSize: 12,
-  },
+  locationRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
+  metaText: { ...typography.small, fontFamily: 'Tajawal_500Medium' },
+
   priceTag: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: borderRadius.sm,
     marginStart: spacing.sm,
   },
-  priceText: {
-    ...typography.bodyBold,
-    fontSize: 15,
-  },
+  priceText: { ...typography.bodyBold, fontFamily: 'Tajawal_700Bold' },
+
+  // Middle Row (Time & Status)
   middleRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
-  timeBadge: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 4,
-  },
-  timeText: {
-    ...typography.small,
-    fontSize: 11,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
+  timeBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  timeText: { ...typography.caption, fontFamily: 'Tajawal_500Medium' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4 },
+
+  // Action Strip (Phone & Affiliate Tag)
   actionStrip: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     marginTop: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#f5f5f5',
     justifyContent: 'space-between',
   },
   quickCall: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
     paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: borderRadius.sm,
+    gap: 8,
+  },
+  quickCallText: { fontSize: 13, fontFamily: 'Tajawal_700Bold' },
+  tagsContainer: { flexDirection: 'row-reverse', gap: 6, flex: 1, justifyContent: 'flex-end' },
+  miniTag: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: borderRadius.sm,
-    gap: 6,
+    maxWidth: 120,
   },
-  quickCallText: {
-    fontSize: 12,
-    fontFamily: 'Tajawal_700Bold',
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    gap: 4,
-    flex: 1,
-  },
-  miniTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    maxWidth: 100,
-  },
-  miniTagText: {
-    fontSize: 10,
-    fontFamily: 'Tajawal_500Medium',
-  },
+  miniTagText: { fontSize: 11, fontFamily: 'Tajawal_500Medium' },
 
+  // Expanded Details Section
   detailsSection: {
     marginTop: spacing.md,
     paddingTop: spacing.md,
@@ -486,64 +551,54 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.small,
     fontFamily: 'Tajawal_700Bold',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     textAlign: 'right',
   },
   itemRow: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
-  itemMain: {
-    alignItems: 'flex-end',
-  },
-  itemName: {
-    ...typography.body,
-    fontSize: 13,
-  },
-  itemQty: {
-    fontSize: 11,
-  },
-  itemPrice: {
-    ...typography.small,
-    fontFamily: 'Tajawal_700Bold',
-  },
+  itemMain: { alignItems: 'flex-end', flex: 1 },
+  itemName: { ...typography.body, fontFamily: 'Tajawal_500Medium', marginBottom: 2, textAlign: 'right' },
+  itemQty: { ...typography.caption, fontFamily: 'Tajawal_400Regular' },
+  itemPrice: { ...typography.bodyBold, fontFamily: 'Tajawal_700Bold', marginStart: spacing.sm },
+
   detailBox: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     marginTop: spacing.sm,
-    padding: spacing.xs,
+    padding: spacing.sm,
     borderRadius: borderRadius.sm,
   },
   detailText: {
     ...typography.small,
+    fontFamily: 'Tajawal_500Medium',
     flex: 1,
     textAlign: 'right',
+    lineHeight: 20,
   },
+
+  // Footer inside Expanded Section
   footerActions: {
     flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+    paddingTop: spacing.sm,
   },
   shareBtn: {
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderRadius: borderRadius.md,
     borderWidth: 1,
   },
-  shareBtnText: {
-    fontSize: 12,
-    fontFamily: 'Tajawal_700Bold',
-  },
-  dateLabel: {
-    opacity: 0.7,
-  },
-  dateLabelText: {
-    fontSize: 10,
-  },
+  shareBtnText: { fontSize: 13, fontFamily: 'Tajawal_700Bold' },
+  dateLabel: { opacity: 0.8 },
+  dateLabelText: { ...typography.caption, fontFamily: 'Tajawal_500Medium' },
 });

@@ -1,12 +1,13 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, Pressable } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Platform } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
-import { spacing, typography } from '../../theme/theme';
+import { spacing, typography, shadows } from '../../theme/theme';
 
 /**
  * Compact StatCard — horizontal layout for mobile.
- * Icon on left, value + title stacked on right.
+ * Re-architected for Reanimated performance and premium solid borders.
  */
 export default function StatCard({
   title,
@@ -20,50 +21,42 @@ export default function StatCard({
   animate = true,
 }) {
   const theme = useTheme();
-  const scaleIn = useRef(new Animated.Value(animate ? 0.97 : 1)).current;
-  const opacityIn = useRef(new Animated.Value(animate ? 0 : 1)).current;
-
-  useEffect(() => {
-    if (animate) {
-      Animated.parallel([
-        Animated.spring(scaleIn, {
-          toValue: 1,
-          friction: 8,
-          tension: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityIn, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, []);
-
   const accentColor = color || theme.primary;
 
+  const ContentWrapper = animate ? Animated.View : View;
+  
+  // Consistent high-performance entry animation
+  const reanimatedProps = animate ? {
+    entering: FadeInDown.delay(50).springify().damping(18).stiffness(120)
+  } : {};
+
+  // Premium Border & Shadow Architecture matching Card.jsx
+  const cardBorder = theme.isDark
+    ? 'rgba(255, 255, 255, 0.08)' // Crisp hairline contrast for dark mode
+    : 'rgba(0, 0, 0, 0.04)';      // Soft ambient contrast for light mode
+
+  const borderStyle = {
+    borderColor: cardBorder,
+    borderWidth: Platform.OS === 'web' ? 1 : StyleSheet.hairlineWidth,
+  };
+
   return (
-    <Animated.View
+    <ContentWrapper
+      {...reanimatedProps}
       style={[
         styles.wrapper,
-        animate && {
-          opacity: opacityIn,
-          transform: [{ scale: scaleIn }],
-        },
         style,
       ]}
     >
       <View
         style={[
           styles.card,
-          {
-            backgroundColor: theme.isDark ? theme.colors.surface : '#FFFFFF',
-            borderColor: theme.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-          },
+          borderStyle,
+          theme.isDark ? shadows.glow : shadows.sm,
+          { backgroundColor: theme.isDark ? theme.colors.surface : '#FFFFFF' },
         ]}
       >
-        {/* Horizontal layout: icon | text block */}
+        {/* Horizontal layout: icon | text block (RTL natively maps to right-to-left) */}
         <View style={styles.row}>
           <View style={[styles.iconBox, { backgroundColor: accentColor + '12' }]}>
             <Ionicons
@@ -115,17 +108,17 @@ export default function StatCard({
               {title}
             </Text>
             {subtitle && (
-              <Text
-                style={[styles.subtitle, { color: theme.colors.textTertiary }]}
-                numberOfLines={1}
-              >
-                {subtitle}
-              </Text>
-            )}
+               <Text
+                 style={[styles.subtitle, { color: theme.colors.textTertiary }]}
+                 numberOfLines={1}
+               >
+                 {subtitle}
+               </Text>
+             )}
           </View>
         </View>
       </View>
-    </Animated.View>
+    </ContentWrapper>
   );
 }
 
@@ -136,12 +129,13 @@ const styles = StyleSheet.create({
   },
   card: {
     borderRadius: 14,
-    borderWidth: 1,
     padding: 10,
+    overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: 10,
   },
   iconBox: {
@@ -154,10 +148,12 @@ const styles = StyleSheet.create({
   textBlock: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'flex-start', // Ensures text blocks correctly hug the RTL start (right edge)
   },
   valueRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: 6,
   },
   value: {

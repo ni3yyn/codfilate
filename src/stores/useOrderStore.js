@@ -1,14 +1,29 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 
+// Helper: safe loading counter to prevent race conditions
+const _startLoading = (set, get) => {
+  const count = (get()._loadingCount || 0) + 1;
+  set({ _loadingCount: count, isLoading: true });
+};
+const _stopLoading = (set, get) => {
+  const count = Math.max(0, (get()._loadingCount || 1) - 1);
+  set({ _loadingCount: count, isLoading: count > 0 });
+};
+
 export const useOrderStore = create((set, get) => ({
   orders: [],
   currentOrder: null,
   stats: { total: 0, pending: 0, confirmed: 0, in_transit: 0, delivered: 0, returned: 0, cancelled: 0, totalRevenue: 0, deliveredRevenue: 0, avgOrderValue: 0, todayOrders: 0, todayRevenue: 0 },
   isLoading: false,
+  _loadingCount: 0,
 
   fetchOrders: async (storeId, statusFilter = null) => {
-    set({ isLoading: true });
+    if (!storeId) {
+      if (__DEV__) console.error('❌ [fetchOrders] Attempted to fetch orders without storeId. Blocking to prevent data leakage.');
+      return { success: false, error: 'Store ID is required' };
+    }
+    _startLoading(set, get);
     try {
       let query = supabase
         .from('orders')
@@ -52,14 +67,15 @@ export const useOrderStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   fetchAffiliateOrders: async (_, statusFilter = null) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error("Not authenticated");
 
       // Get all affiliate relation IDs for this user
@@ -91,12 +107,12 @@ export const useOrderStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   fetchOrder: async (orderId) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -110,12 +126,12 @@ export const useOrderStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   createOrder: async (orderData, items) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       if (__DEV__) console.log('🚀 [createOrder] Payload Data:', JSON.stringify(orderData, null, 2));
       if (__DEV__) console.log('📦 [createOrder] Items Data:', JSON.stringify(items, null, 2));
@@ -158,7 +174,7 @@ export const useOrderStore = create((set, get) => ({
       if (__DEV__) console.error('💥 [createOrder] Fatal Catch Error:', error);
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
@@ -190,7 +206,7 @@ export const useOrderStore = create((set, get) => ({
       if (__DEV__) console.error('💥 [updateOrderStatus] Auto Stock Error:', error);
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
@@ -210,7 +226,7 @@ export const useOrderStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
@@ -233,15 +249,19 @@ export const useOrderStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   fetchOrderStats: async (storeId) => {
+    if (!storeId) {
+      if (__DEV__) console.warn('⚠️ [fetchOrderStats] Called without storeId. Returning empty stats.');
+      return { success: true, data: {} };
+    }
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('status, total, created_at')
+        .select('status, total, created_at, base_price')
         .eq('store_id', storeId);
 
       if (error) throw error;
@@ -250,11 +270,18 @@ export const useOrderStore = create((set, get) => ({
       const deliveredOrders = data.filter((o) => o.status === 'delivered');
       const todayOrders = data.filter((o) => o.created_at?.startsWith(today));
 
+      const getMerchantShare = (o) => {
+        // Merchant share = strictly Base Price (Product Price - Commission)
+        // Delivery fees go to the platform, so they are excluded here.
+        // If base_price is missing (legacy), fallback to total.
+        return Number(o.base_price ?? o.total ?? 0);
+      };
+
       const stats = {
         total: data.length,
-        totalRevenue: data.reduce((sum, o) => sum + Number(o.total), 0),
-        deliveredRevenue: deliveredOrders.reduce((sum, o) => sum + Number(o.total), 0),
-        avgOrderValue: data.length > 0 ? Math.round(data.reduce((sum, o) => sum + Number(o.total), 0) / data.length) : 0,
+        totalRevenue: data.reduce((sum, o) => sum + getMerchantShare(o), 0),
+        deliveredRevenue: deliveredOrders.reduce((sum, o) => sum + getMerchantShare(o), 0),
+        avgOrderValue: data.length > 0 ? Math.round(data.reduce((sum, o) => sum + getMerchantShare(o), 0) / data.length) : 0,
         pending: data.filter((o) => o.status === 'pending').length,
         confirmed: data.filter((o) => o.status === 'confirmed' || o.status === 'confirmed_by_manager').length,
         in_transit: data.filter((o) => o.status === 'in_transit').length,
@@ -262,7 +289,7 @@ export const useOrderStore = create((set, get) => ({
         returned: data.filter((o) => o.status === 'returned').length,
         cancelled: data.filter((o) => o.status === 'cancelled').length,
         todayOrders: todayOrders.length,
-        todayRevenue: todayOrders.reduce((sum, o) => sum + Number(o.total), 0),
+        todayRevenue: todayOrders.reduce((sum, o) => sum + getMerchantShare(o), 0),
         conversionRate: data.length > 0 ? ((deliveredOrders.length / data.length) * 100).toFixed(1) : '0',
       };
 

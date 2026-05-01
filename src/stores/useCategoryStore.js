@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { PRESET_CATEGORIES } from '../config/presetCategories';
 
 export const useCategoryStore = create((set, get) => ({
-  categories: [],
+  categories: [], // Global categories (for adding products)
+  storeCategories: [], // Categories selected by the current merchant
   subcategories: [],
   isLoading: false,
   error: null,
@@ -10,11 +12,98 @@ export const useCategoryStore = create((set, get) => ({
   // ──────────────── CATEGORIES ────────────────
 
   /**
-   * Fetch all global categories (platform-wide).
-   * If storeId is provided, still returns all categories
-   * (since categories are now global), but the caller can
-   * filter to only those with products in their store.
+   * Fetch categories selected by a specific merchant store.
+   * Joins with merchant_category_selections to return only active presets.
    */
+  fetchStoreCategories: async (storeId) => {
+    if (!storeId) return { success: false, error: 'Store ID is required' };
+    set({ isLoading: true, error: null });
+    try {
+      // 1. Fetch the IDs of categories selected by this merchant
+      const { data: selections, error: selError } = await supabase
+        .from('merchant_category_selections')
+        .select('category_id')
+        .eq('store_id', storeId);
+
+      if (selError) throw selError;
+
+      const selectedIds = (selections || []).map(s => s.category_id);
+
+      // 2. Fetch the actual categories (global + store-specific)
+      // but filter by the selected IDs
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*, subcategories(*)')
+        .in('id', selectedIds.length > 0 ? selectedIds : ['00000000-0000-0000-0000-000000000000']) // Avoid error if empty
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+
+      set({ storeCategories: data || [], isLoading: false });
+      return { success: true, data };
+    } catch (err) {
+      set({ error: err.message, isLoading: false });
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
+   * Toggle a category's active status for a specific merchant store.
+   */
+  toggleStoreCategory: async (storeId, categorySlug, isActive) => {
+    if (!storeId || !categorySlug) return { success: false, error: 'Missing params' };
+    
+    try {
+      // 1. Resolve the category ID from the slug (id in presetCategories)
+      // Note: In the global system, categories might use the slug as name_normalized
+      const { data: cat, error: catError } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('name_normalized', categorySlug.toLowerCase())
+        .single();
+
+      let finalCatId = cat?.id;
+
+      if (catError || !cat) {
+        // Find full preset data
+        const preset = PRESET_CATEGORIES.find(p => p.id === categorySlug);
+        
+        // If not found, it might be the first time this preset is used.
+        // We'll create it.
+        const { data: newId, error: createError } = await supabase.rpc('upsert_global_category', {
+          p_name: preset?.name || categorySlug,
+          p_icon: preset?.icon || 'grid-outline',
+          p_name_ar: preset?.name_ar || null,
+          p_name_fr: preset?.name_fr || null
+        });
+        if (createError) throw createError;
+        finalCatId = newId;
+      }
+
+      if (isActive) {
+        const { error } = await supabase
+          .from('merchant_category_selections')
+          .upsert(
+            { store_id: storeId, category_id: finalCatId },
+            { onConflict: 'store_id, category_id' }
+          );
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('merchant_category_selections')
+          .delete()
+          .match({ store_id: storeId, category_id: finalCatId });
+        if (error) throw error;
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error('[CategoryStore] toggleStoreCategory error:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
   fetchCategories: async (storeId) => {
     set({ isLoading: true, error: null });
     try {

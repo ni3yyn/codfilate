@@ -59,7 +59,7 @@ export default function Index() {
 
     if (!isAuthenticated) {
       hasNavigated.current = true;
-      router.replace("/(auth)/login");
+      router.replace("/home");
       return;
     }
 

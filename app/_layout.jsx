@@ -1,24 +1,9 @@
-// ===== CRASH TRACER (temporary) — remove after debugging =====
-console.log('🔵 [BOOT-0] _layout.jsx module evaluation started');
-
 import React, { useEffect, useCallback, useRef } from 'react';
-console.log('🔵 [BOOT-1] React loaded');
-
 import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
-console.log('🔵 [BOOT-2] expo-router loaded');
-
 import { StatusBar } from 'expo-status-bar';
-console.log('🔵 [BOOT-3] expo-status-bar loaded');
-
 import { View, Text, StyleSheet, I18nManager, TouchableOpacity, Platform } from 'react-native';
-console.log('🔵 [BOOT-4] react-native loaded');
-
 import { Ionicons } from '@expo/vector-icons';
-console.log('🔵 [BOOT-5] @expo/vector-icons loaded');
-
 import * as SplashScreen from 'expo-splash-screen';
-console.log('🔵 [BOOT-6] expo-splash-screen loaded');
-
 import {
   useFonts,
   Tajawal_400Regular,
@@ -26,44 +11,20 @@ import {
   Tajawal_700Bold,
   Tajawal_800ExtraBold
 } from '@expo-google-fonts/tajawal';
-console.log('🔵 [BOOT-7] @expo-google-fonts/tajawal loaded');
-
 import { useAuthStore } from '../src/stores/useAuthStore';
-console.log('🔵 [BOOT-8] useAuthStore loaded');
-
 import { usePushRegistration } from '../src/hooks/usePushNotifications';
-console.log('🔵 [BOOT-9] usePushNotifications loaded');
-
 import { useThemeStore } from '../src/stores/useThemeStore';
-console.log('🔵 [BOOT-10] useThemeStore loaded');
-
 import { useAlertStore } from '../src/stores/useAlertStore';
-console.log('🔵 [BOOT-11] useAlertStore loaded');
-
+import { useNotificationsStore } from '../src/stores/useNotificationsStore';
 import GlobalAlert from '../src/components/ui/GlobalAlert';
-console.log('🔵 [BOOT-12] GlobalAlert loaded');
-
 import PlatformGate from '../src/components/PlatformGate';
-console.log('🔵 [BOOT-12b] PlatformGate loaded');
-
 import { getHomeForRole } from '../src/lib/roleRouter';
-console.log('🔵 [BOOT-13] roleRouter loaded');
-
 import { colors, typography, spacing, borderRadius } from '../src/theme/theme';
-console.log('🔵 [BOOT-14] theme loaded');
-
 import { appConfig } from '../src/lib/appConfig';
-console.log('🔵 [BOOT-15] appConfig loaded');
-
 import { securityShield } from '../src/lib/security.js';
-console.log('🔵 [BOOT-16] security loaded');
-
-// ADD THIS IMPORT FOR ANDROID NAVIGATION BAR
 import * as NavigationBar from 'expo-navigation-bar';
-console.log('🔵 [BOOT-17] expo-navigation-bar loaded');
 
 // Keep splash screen visible while loading resources
-console.log('🔵 [BOOT-18] All imports done, calling preventAutoHideAsync');
 SplashScreen.preventAutoHideAsync();
 
 // Enforce RTL universally for the Arabic UI (Safe Management)
@@ -230,35 +191,42 @@ function SecurityBreachScreen({ threats }) {
 }
 
 export default function RootLayout() {
-  console.log('🟢 [RENDER-0] RootLayout function called');
 
   useRTL();
-  console.log('🟢 [RENDER-1] useRTL done');
+
 
   const initialize = useAuthStore((s) => s.initialize);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const userId = useAuthStore((s) => s.user?.id);
   const profile = useAuthStore((s) => s.profile);
-  console.log('🟢 [RENDER-2] useAuthStore done');
+
 
   const segments = useSegments();
-  console.log('🟢 [RENDER-3] useSegments done');
+
 
   const router = useRouter();
-  console.log('🟢 [RENDER-4] useRouter done');
+
 
   const navigationState = useRootNavigationState();
-  console.log('🟢 [RENDER-5] useRootNavigationState done');
+
 
   const hasNavigated = useRef(false);
 
   usePushRegistration(userId);
-  console.log('🟢 [RENDER-6] usePushRegistration done');
+
+  const fetchNotifications = useNotificationsStore(s => s.fetchNotifications);
+
+  useEffect(() => {
+    if (isAuthenticated && userId) {
+      fetchNotifications(userId);
+    }
+  }, [isAuthenticated, userId]);
+
 
   const mode = useThemeStore((s) => s.mode);
   const themeColors = mode === 'dark' ? colors.dark : colors.light;
-  console.log('🟢 [RENDER-7] useThemeStore done');
+
 
   const [fontsLoaded, fontError] = useFonts({
     Tajawal_400Regular,
@@ -266,24 +234,19 @@ export default function RootLayout() {
     Tajawal_700Bold,
     Tajawal_800ExtraBold,
   });
-  console.log('🟢 [RENDER-8] useFonts done, loaded:', fontsLoaded, 'error:', fontError);
+
 
   const [securityStatus, setSecurityStatus] = React.useState({ isSecure: true, threats: [] });
   const [initError, setInitError] = React.useState(null);
-  console.log('🟢 [RENDER-9] useState done');
+
 
   useEffect(() => {
-    console.log('🟡 [EFFECT-1] startApp useEffect fired');
     async function startApp() {
       try {
-        console.log('🟡 [EFFECT-1a] calling initialize()');
         await initialize();
-        console.log('🟡 [EFFECT-1b] initialize() done');
 
         // STB-4: Perform security audit safely
-        console.log('🟡 [EFFECT-1c] calling securityShield.checkEnvironment()');
         const res = await securityShield.checkEnvironment();
-        console.log('🟡 [EFFECT-1d] security check done:', res);
         setSecurityStatus(res);
       } catch (err) {
         console.warn('[RootLayout] Init failed:', err);
@@ -304,7 +267,7 @@ export default function RootLayout() {
           const barStyle = mode === 'dark' ? 'light' : 'dark';
           await NavigationBar.setButtonStyleAsync(barStyle);
           
-          console.log(`✅ Android navigation buttons synced with ${mode} theme`);
+
         } catch (error) {
           console.warn('NavigationBar setup failed:', error);
         }
@@ -327,7 +290,7 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const isPublicRoute = segments[0] === 'track' || segments[0] === 'c'
-      || segments[0] === 'submit-order' || segments[0] === undefined || segments[0] === '';
+      || segments[0] === 'submit-order' || segments[0] === 'home' || segments[0] === undefined || segments[0] === '';
 
     if (!isAuthenticated && !inAuthGroup && !isPublicRoute) {
       // Unauthenticated user on a protected route → login
@@ -366,10 +329,10 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-  console.log('🟢 [RENDER-10] About to return JSX, fontsLoaded:', fontsLoaded, 'fontError:', fontError);
+
 
   if (!fontsLoaded && !fontError) {
-    console.log('🟢 [RENDER-11] Returning null (fonts not loaded yet)');
+
     return null;
   }
 
@@ -388,7 +351,7 @@ export default function RootLayout() {
     return <DiagnosticScreen title="خطأ فادح في البداية" subtitle={initError.message} />;
   }
 
-  console.log('🟢 [RENDER-12] Past all guards, about to render Stack');
+
 
   // Catch any native-level errors during route resolution
   const origHandler = ErrorUtils.getGlobalHandler();

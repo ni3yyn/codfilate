@@ -287,15 +287,18 @@ export const useRegionalManagerStore = create((set, get) => ({
     }
   },
 
-  activateMerchantStore: async (storeId) => {
+  activateMerchantStore: async (storeId, wilayaId = null) => {
     try {
       const role = useAuthStore.getState().profile?.role;
       const rpc =
         role === 'admin' ? 'admin_activate_merchant_store' : 'regional_manager_activate_store';
       
-      if (__DEV__) console.log(`🚀 [activateMerchantStore] RPC: ${rpc} for ID: ${storeId}`);
+      if (__DEV__) console.log(`🚀 [activateMerchantStore] RPC: ${rpc} for ID: ${storeId} (Wilaya: ${wilayaId})`);
       
-      const { error } = await supabase.rpc(rpc, { p_store_id: storeId });
+      const { error } = await supabase.rpc(rpc, { 
+        p_store_id: storeId,
+        p_wilaya_id: wilayaId
+      });
       
       if (error) {
         if (__DEV__) console.error(`❌ [activateMerchantStore] RPC Error:`, error);
@@ -308,6 +311,21 @@ export const useRegionalManagerStore = create((set, get) => ({
       const errMsg = error.message || 'فشل الاتصال بالخادم';
       if (__DEV__) console.error('❌ [activateMerchantStore] Exception:', error);
       return { success: false, error: errMsg };
+    }
+  },
+
+  rejectMerchantStore: async (storeId, reason) => {
+    try {
+      const { error } = await supabase.rpc('regional_manager_reject_store', { 
+        p_store_id: storeId,
+        p_reason: reason
+      });
+      
+      if (error) throw error;
+      return { success: true };
+    } catch (error) {
+      if (__DEV__) console.error('❌ [rejectMerchantStore] Error:', error);
+      return { success: false, error: error.message };
     }
   },
 
@@ -475,6 +493,7 @@ export const useRegionalManagerStore = create((set, get) => ({
             notes,
             status,
             tracking_status,
+            cod_confirmed_at,
             order_items(product_name, quantity, unit_price)
           ),
           wilayas(name, name_fr, code)

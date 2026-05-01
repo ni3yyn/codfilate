@@ -34,8 +34,14 @@ export default function AffiliateLayout() {
     if (isLoading || (isAuthenticated && !profile)) return;
     if (!profile || profile.role !== "affiliate") {
       router.replace(profile ? getHomeForRole(profile.role) : "/(auth)/login");
+      return;
     }
-  }, [isLoading, isAuthenticated, profile]);
+
+    // Onboarding guard
+    if (profile.onboarding_completed === false) {
+      router.replace("/(affiliate)/onboarding");
+    }
+  }, [isLoading, isAuthenticated, profile, router]);
 
   // Fail-secure: render nothing while auth state is indeterminate
   if (isLoading || (isAuthenticated && !profile)) return null;
@@ -55,6 +61,7 @@ export default function AffiliateLayout() {
       }
       screenOptions={{ headerShown: false }}
     >
+      <Tabs.Screen name="onboarding" options={{ href: null }} />
       <Tabs.Screen
         name="dashboard"
         options={{ title: "الرئيسية", tabBarIconName: "grid" }}

@@ -1,12 +1,20 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, I18nManager, Animated, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  interpolateColor,
+  FadeInUp
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
-import { spacing, typography, animation, borderRadius } from '../../theme/theme';
+import { spacing, typography, borderRadius } from '../../theme/theme';
 
 /**
  * Premium Solid Input component.
- * Features: Background fill, subtle focus animation, consistent typography.
+ * Upgraded with Reanimated for smooth background and border color interpolation,
+ * and stable borders to prevent layout shifts.
  */
 export default function Input({
   label,
@@ -27,26 +35,34 @@ export default function Input({
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const borderFade = useRef(new Animated.Value(0)).current;
+  // High-performance shared value for focus state (0 = blurred, 1 = focused)
+  const focusAnim = useSharedValue(0);
 
-  useEffect(() => {
-    Animated.timing(borderFade, {
-      toValue: focused ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
+  React.useEffect(() => {
+    focusAnim.value = withTiming(focused ? 1 : 0, { duration: 250 });
   }, [focused]);
 
-  const borderColor = error
-    ? theme.error
-    : borderFade.interpolate({
-        inputRange: [0, 1],
-        outputRange: [theme.colors.border, theme.primary],
-      });
+  // Smoothly interpolate background and border colors on the UI thread
+  const containerStyle = useAnimatedStyle(() => {
+    const borderColor = error 
+      ? theme.error 
+      : interpolateColor(
+          focusAnim.value,
+          [0, 1],
+          [theme.colors.border, theme.primary]
+        );
 
-  const backgroundColor = focused 
-    ? theme.colors.surface 
-    : theme.colors.surface2;
+    const backgroundColor = interpolateColor(
+      focusAnim.value,
+      [0, 1],
+      [theme.colors.surface2, theme.colors.surface]
+    );
+
+    return {
+      borderColor,
+      backgroundColor,
+    };
+  });
 
   return (
     <View style={[styles.wrapper, style]}>
@@ -58,11 +74,7 @@ export default function Input({
       <Animated.View
         style={[
           styles.container,
-          {
-            backgroundColor,
-            borderColor,
-            borderWidth: focused || error ? 1.5 : 1,
-          },
+          containerStyle,
           multiline ? { minHeight: Math.max(80, numberOfLines * 24), alignItems: 'flex-start' } : null,
         ]}
       >
@@ -70,7 +82,7 @@ export default function Input({
           <Ionicons
             name={icon}
             size={20}
-            color={focused ? theme.primary : theme.colors.textTertiary}
+            color={error ? theme.error : (focused ? theme.primary : theme.colors.textTertiary)}
             style={styles.icon}
           />
         )}
@@ -89,9 +101,7 @@ export default function Input({
           selectionColor={theme.primary}
           style={[
             styles.input,
-            {
-              color: theme.colors.text,
-            },
+            { color: theme.colors.text },
             multiline ? { textAlignVertical: 'top', paddingTop: 14 } : null,
             inputStyle,
           ]}
@@ -110,11 +120,13 @@ export default function Input({
           </TouchableOpacity>
         )}
       </Animated.View>
+      
+      {/* Animated Error Entrance */}
       {error && (
-        <View style={styles.errorContainer}>
+        <Animated.View entering={FadeInUp.duration(300).springify()} style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={14} color={theme.error} />
           <Text style={[styles.error, { color: theme.error }]}>{error}</Text>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -137,8 +149,9 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row', // RTL alignment natively handled by I18nManager
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: borderRadius.md,
     paddingHorizontal: 16,
+    borderWidth: 1, // Fixed border width to prevent layout shifting
     ...Platform.select({
       web: { outlineStyle: 'none' },
     }),
@@ -159,6 +172,7 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     marginTop: 6,
     marginEnd: 4,
     gap: 4,

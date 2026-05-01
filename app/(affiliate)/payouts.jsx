@@ -85,8 +85,10 @@ export default function AffiliatePayouts() {
   const {
     affiliateProfile,
     payoutRequests,
+    stats: affiliateStats,
     fetchAffiliateProfile,
     fetchPayoutRequests,
+    fetchAffiliateStats,
     createPayoutRequest,
     isLoading,
   } = useAffiliateStore();
@@ -97,6 +99,7 @@ export default function AffiliatePayouts() {
   const [method, setMethod] = useState("ccp");
   const [details, setDetails] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNoBalanceModal, setShowNoBalanceModal] = useState(false);
 
   // Financial Calculations
   const pendingAmount = (payoutRequests || [])
@@ -105,9 +108,15 @@ export default function AffiliatePayouts() {
   const paidAmount = (payoutRequests || [])
     .filter((r) => r.status === "paid")
     .reduce((sum, r) => sum + Number(r.amount), 0);
-  const availableBalance = Number(wallet?.balance ?? 0) - pendingAmount;
+  const availableBalance = profile?.role === 'affiliate'
+    ? Math.max(0, Number(affiliateStats?.available_balance || 0) - pendingAmount)
+    : (Number(wallet?.balance ?? 0) - pendingAmount);
 
   const openModal = () => {
+    if (availableBalance <= 0) {
+      setShowNoBalanceModal(true);
+      return;
+    }
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setShowForm(true);
@@ -131,6 +140,7 @@ export default function AffiliatePayouts() {
     }
     if (profile?.user_id) {
       await fetchPayoutRequests();
+      await fetchAffiliateStats();
     }
   }, [
     profile,
@@ -180,7 +190,11 @@ export default function AffiliatePayouts() {
   // Auto-fill details based on selected method
   useEffect(() => {
     if (!profile) return;
-    if (method === "ccp") setDetails(profile.ccp_number || "");
+    if (method === "ccp") {
+      const ccp = profile.ccp_number || "";
+      const key = profile.ccp_key || "";
+      setDetails(key ? `${ccp} / ${key}` : ccp);
+    }
     else if (method === "baridimob") setDetails(profile.baridimob_number || "");
     else if (method === "flexy") setDetails(profile.flexy_number || "");
   }, [method, profile]);
@@ -190,7 +204,7 @@ export default function AffiliatePayouts() {
     icon: 'cash-outline',
     label: 'سحب أرباح',
     onPress: openModal,
-    visible: !showForm && availableBalance >= (Number(minPayout) || 100),
+    visible: !showForm,
   });
 
   const onRefresh = async () => {
@@ -391,20 +405,19 @@ export default function AffiliatePayouts() {
       <View
         style={[styles.payoutBody, { borderTopColor: theme.colors.border }]}
       >
-        <View style={styles.payoutAmountRow}>
-          <Text
-            style={[typography.body, { color: theme.colors.textSecondary }]}
-          >
-            المبلغ المطلوب:
-          </Text>
-          <Text
-            style={[
-              typography.h3,
-              { color: theme.colors.text, writingDirection: "rtl" },
-            ]}
-          >
-            {formatCurrency(item.amount)}
-          </Text>
+        <View style={styles.payoutDetailsRow}>
+          <View style={styles.payoutDetailItem}>
+            <Text style={[styles.detailLabel, { color: theme.colors.textTertiary }]}>المبلغ:</Text>
+            <Text style={[styles.detailValue, { color: theme.colors.text, fontSize: 18 }]}>
+              {formatCurrency(item.amount)}
+            </Text>
+          </View>
+          <View style={styles.payoutDetailItem}>
+            <Text style={[styles.detailLabel, { color: theme.colors.textTertiary }]}>بيانات الدفع:</Text>
+            <Text style={[styles.detailValue, { color: theme.colors.textSecondary }]} numberOfLines={1}>
+              {item.payment_details || '---'}
+            </Text>
+          </View>
         </View>
 
         {(item.admin_notes || item.external_ref || item.payout_proof_url) && (
@@ -638,6 +651,57 @@ export default function AffiliatePayouts() {
     );
   };
 
+  const renderNoBalanceContent = () => (
+    <View style={styles.noBalanceContent}>
+      <View style={[styles.infoIconWrap, { backgroundColor: theme.primary + '10' }]}>
+        <Ionicons name="information-circle-outline" size={40} color={theme.primary} />
+      </View>
+      <Text style={[styles.infoTitle, { color: theme.colors.text }]}>لا يوجد رصيد متاح للسحب</Text>
+      <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+        عذراً، رصيدك الحالي هو {formatCurrency(0)}. لتتمكن من طلب سحب، يجب أن تكون لديك عمولات مأكدة من مبيعات ناجحة تم توصيلها للزبائن.
+      </Text>
+      <View style={[styles.stepBox, { backgroundColor: theme.colors.surface2 }]}>
+        <Text style={[styles.stepText, { color: theme.colors.textSecondary }]}>
+          ✅ اختر منتجات من المتجر وشارك الروابط.{"\n"}
+          ✅ ستقوم المنصة بتوصيل الطلبات لزبائنك.{"\n"}
+          ✅ عند تسليم الطلب، تضاف العمولة لرصيدك فوراً.
+        </Text>
+      </View>
+      <Button 
+        title="فهمت" 
+        onPress={() => setShowNoBalanceModal(false)} 
+        variant="primary" 
+        style={{ marginTop: spacing.lg, width: '100%' }} 
+      />
+    </View>
+  );
+
+  const renderNoBalanceModal = () => {
+    if (Platform.OS === 'web') {
+      return (
+        <Modal
+          visible={showNoBalanceModal}
+          onClose={() => setShowNoBalanceModal(false)}
+          title="رصيدك الحالي صفر"
+          subtitle="كيف يمكنك البدء في سحب الأموال؟"
+          maxWidth={500}
+        >
+          {renderNoBalanceContent()}
+        </Modal>
+      );
+    }
+    return (
+      <BottomSheet
+        visible={showNoBalanceModal}
+        onClose={() => setShowNoBalanceModal(false)}
+        title="رصيدك الحالي صفر"
+        subtitle="كيف يمكنك البدء في سحب الأموال؟"
+      >
+        {renderNoBalanceContent()}
+      </BottomSheet>
+    );
+  };
+
   return (
     <SafeAreaView
       style={[styles.safe, { backgroundColor: theme.colors.background }]}
@@ -647,6 +711,8 @@ export default function AffiliatePayouts() {
         title="المالية والسحوبات"
         subtitle="إدارة وتبسيط عمليات سحب مستحقاتك"
       />
+      
+      {renderNoBalanceModal()}
 
       <View style={styles.centerWrapper}>
         <ScrollView
@@ -702,6 +768,8 @@ export default function AffiliatePayouts() {
             <View
               style={[styles.statsRow, isDesktop && styles.desktopStatsStack]}
             >
+
+
               {/* Pending Stat Card */}
               <Card
                 style={[
@@ -941,7 +1009,7 @@ const styles = StyleSheet.create({
   },
 
   // Stats Card Layout (Strict Right-To-Left Alignments)
-  statsRow: { flexDirection: "row-reverse", gap: spacing.sm },
+  statsRow: { flexDirection: "row-reverse", gap: spacing.sm, flexWrap: "wrap" },
   statCard: {
     flex: 1,
     borderWidth: 1,
@@ -1050,12 +1118,26 @@ const styles = StyleSheet.create({
   payoutBody: {
     padding: spacing.md,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
   },
-  payoutAmountRow: {
+  payoutDetailsRow: {
     flexDirection: "row-reverse",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: spacing.md,
+  },
+  payoutDetailItem: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  detailLabel: {
+    ...typography.caption,
+    marginBottom: 2,
+    textAlign: "right",
+  },
+  detailValue: {
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 14,
+    textAlign: "right",
   },
 
   payoutNotesWrapper: {
@@ -1173,4 +1255,39 @@ const styles = StyleSheet.create({
   },
 
   bottomSpacer: { height: 120 },
+  
+  // No Balance Modal Styles
+  noBalanceContent: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  infoIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  infoTitle: {
+    ...typography.h3,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  infoText: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  stepBox: {
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+  },
+  stepText: {
+    ...typography.small,
+    lineHeight: 24,
+    textAlign: 'right',
+  },
 });

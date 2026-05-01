@@ -13,6 +13,7 @@ import CustomAlert from '../../src/components/ui/CustomAlert';
 import { typography, spacing, borderRadius } from '../../src/theme/theme';
 import { formatCurrency } from '../../src/lib/utils';
 import { REGIONAL_MANAGER_FEE } from '../../src/lib/constants';
+import SignOutButton from '../../src/components/ui/SignOutButton';
 
 export default function RegionalManagerProfile() {
   const theme = useTheme();
@@ -77,14 +78,7 @@ export default function RegionalManagerProfile() {
         </Card>
 
         {/* Logout */}
-        <TouchableOpacity
-          style={[styles.logoutBtn, { borderColor: theme.error + '40', backgroundColor: theme.error + '08' }]}
-          onPress={handleLogout}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="log-out-outline" size={20} color={theme.error} />
-          <Text style={[styles.logoutText, { color: theme.error }]}>تسجيل الخروج</Text>
-        </TouchableOpacity>
+        <SignOutButton onPress={handleLogout} />
       </ScrollView>
 
       <CustomAlert
@@ -136,14 +130,4 @@ const styles = StyleSheet.create({
   },
   infoLabel: { ...typography.body },
   infoValue: { ...typography.h3 },
-  logoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    gap: 8,
-  },
-  logoutText: { ...typography.button },
 });

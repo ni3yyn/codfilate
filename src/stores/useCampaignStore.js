@@ -25,12 +25,22 @@ const executeSupabase = async (operation, maxRetries = 3) => {
   }
 };
 
+// Helper: safe loading counter to prevent race conditions
+const _startLoading = (set, get) => {
+  const count = (get()._loadingCount || 0) + 1;
+  set({ _loadingCount: count, isLoading: true });
+};
+const _stopLoading = (set, get) => {
+  const count = Math.max(0, (get()._loadingCount || 1) - 1);
+  set({ _loadingCount: count, isLoading: count > 0 });
+};
+
 export const useCampaignStore = create((set, get) => ({
   campaigns: [],
   isLoading: false,
-
+  _loadingCount: 0,
   fetchCampaignsForAffiliate: async (_) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       // Use getSession instead of getUser to prevent unnecessary network calls that trigger the refresh lock
       const { data: { session }, error: authError } = await executeSupabase(() => supabase.auth.getSession());
@@ -50,7 +60,7 @@ export const useCampaignStore = create((set, get) => ({
 
       const { data, error } = await executeSupabase(() => supabase
         .from('marketing_campaigns')
-        .select('*, products(id, name, price, image_url, listing_status)')
+        .select('*, products(id, name, price, image_url, gallery_urls, product_images(*), listing_status)')
         .in('affiliate_id', affiliateIds)
         .eq('is_active', true)
         .order('created_at', { ascending: false }));
@@ -61,7 +71,7 @@ export const useCampaignStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
@@ -90,12 +100,12 @@ export const useCampaignStore = create((set, get) => ({
     }
   },
 
-  createCampaign: async ({ affiliateId, productId, salePrice, slug, page_config }) => {
-    set({ isLoading: true });
+  createCampaign: async ({ affiliateId, productId, slug, page_config }) => {
+    _startLoading(set, get);
     try {
       const { data: product, error: pe } = await executeSupabase(() => supabase
         .from('products')
-        .select('store_id, price, listing_status')
+        .select('store_id, price, commission_amount, listing_status')
         .eq('id', productId)
         .single());
 
@@ -104,10 +114,8 @@ export const useCampaignStore = create((set, get) => ({
       if (ls !== 'published') {
         throw new Error('المنتج يجب أن يكون منشوراً لإنشاء رابط بيع');
       }
-      const sp = parseFloat(salePrice);
-      if (!(sp >= 0) || sp < Number(product.price)) {
-        throw new Error('سعر البيع يجب أن يكون أكبر أو يساوي سعر المورد');
-      }
+      // Product price IS the sale price — commission is cut from it, not added
+      const sp = Number(product.price);
 
       const { data, error } = await executeSupabase(() => supabase
         .from('marketing_campaigns')
@@ -120,7 +128,7 @@ export const useCampaignStore = create((set, get) => ({
           is_active: true,
           page_config: page_config || { template: 'artisan' }
         })
-        .select('*, products(id, name, price, image_url, listing_status)')
+        .select('*, products(id, name, price, image_url, gallery_urls, product_images(*), listing_status)')
         .single());
 
       if (error) throw error;
@@ -133,24 +141,22 @@ export const useCampaignStore = create((set, get) => ({
       }
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
-  updateCampaign: async (campaignId, { salePrice, slug, page_config, productId }) => {
-    set({ isLoading: true });
+  updateCampaign: async (campaignId, { slug, page_config, productId }) => {
+    _startLoading(set, get);
     try {
       const { data: product, error: pe } = await executeSupabase(() => supabase
         .from('products')
-        .select('price')
+        .select('price, commission_amount')
         .eq('id', productId)
         .single());
 
       if (pe) throw pe;
-      const sp = parseFloat(salePrice);
-      if (!(sp >= 0) || sp < Number(product.price)) {
-        throw new Error('سعر البيع يجب أن يكون أكبر أو يساوي سعر المورد');
-      }
+      // Product price IS the sale price — commission is cut from it, not added
+      const sp = Number(product.price);
 
       const { data, error } = await executeSupabase(() => supabase
         .from('marketing_campaigns')
@@ -160,7 +166,7 @@ export const useCampaignStore = create((set, get) => ({
           page_config: page_config
         })
         .eq('id', campaignId)
-        .select('*, products(id, name, price, image_url, listing_status)')
+        .select('*, products(id, name, price, image_url, gallery_urls, product_images(*), listing_status)')
         .single());
 
       if (error) throw error;
@@ -173,12 +179,12 @@ export const useCampaignStore = create((set, get) => ({
       }
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   deleteCampaign: async (campaignId) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const { error } = await executeSupabase(() => supabase
         .from('marketing_campaigns')
@@ -195,7 +201,7 @@ export const useCampaignStore = create((set, get) => ({
       }
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 

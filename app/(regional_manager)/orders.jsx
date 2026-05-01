@@ -21,7 +21,7 @@ import EmptyState from '../../src/components/ui/EmptyState';
 import LoadingSpinner from '../../src/components/ui/LoadingSpinner';
 import { typography, spacing, borderRadius } from '../../src/theme/theme';
 import { formatCurrency } from '../../src/lib/utils';
-import { ORDER_STATUS_AR, ORDER_STATUS_COLORS } from '../../src/lib/constants';
+import { ORDER_STATUS_AR, ORDER_STATUS_COLORS, DELIVERY_TYPES_AR } from '../../src/lib/constants';
 
 const STATUS_FILTERS = [
   { key: null, label: 'الكل', icon: 'list' },
@@ -47,6 +47,7 @@ export default function RegionalManagerOrders() {
   const profile = useAuthStore(s => s.profile);
   const { 
     orders, fetchWilayaOrders, confirmOrder, updateOrderLifecycleStatus, 
+    confirmCodCollected,
     isLoading, fetchInventory, inventory, fulfillFromStock
   } = useRegionalManagerStore();
   const { showAlert, showConfirm } = useAlertStore();
@@ -134,6 +135,19 @@ export default function RegionalManagerOrders() {
     });
   };
 
+  const handleConfirmCod = async (orderId) => {
+    setProcessingOrderId(orderId);
+    const res = await confirmCodCollected(orderId);
+    if (res.success) {
+      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      showAlert({ title: 'تم التحصيل', message: 'تم تأكيد استلام المبلغ المالي بنجاح.', type: 'success' });
+      await loadOrders();
+    } else {
+      showAlert({ title: 'خطأ', message: res.error, type: 'error' });
+    }
+    setProcessingOrderId(null);
+  };
+
   const handleStatusAdvance = async (orderId, nextStatus, successMessage) => {
     setProcessingOrderId(orderId);
     const res = await updateOrderLifecycleStatus(orderId, nextStatus);
@@ -219,7 +233,7 @@ export default function RegionalManagerOrders() {
                 </View>
               </View>
               <View style={[styles.priceTag, { backgroundColor: theme.primary + '10' }]}>
-                <Text style={[styles.priceText, { color: theme.primary }]}>{formatCurrency(order.sale_price || order.total)}</Text>
+                <Text style={[styles.priceText, { color: theme.primary }]}>{formatCurrency(order.total)}</Text>
               </View>
             </View>
 
@@ -257,16 +271,39 @@ export default function RegionalManagerOrders() {
                 </View>
 
                 {!!order.affiliates?.profiles?.full_name && (
-                  <View style={styles.affiliateBox}>
+                  <View style={styles.infoBox}>
                     <Ionicons name="person-outline" size={14} color={theme.colors.textSecondary} />
-                    <Text style={[styles.affiliateText, { color: theme.colors.textSecondary }]}>المسوق: {order.affiliates.profiles.full_name}</Text>
+                    <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>المسوق: {order.affiliates.profiles.full_name}</Text>
                   </View>
                 )}
 
+                {/* Financial & Delivery Details Breakdown */}
+                <View style={[styles.detailsBox, { backgroundColor: theme.isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderColor: theme.colors.border }]}>
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>سعر المنتج</Text>
+                    <Text style={[styles.detailValue, { color: theme.colors.text }]}>{formatCurrency(order.sale_price)}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>رسوم التوصيل ({DELIVERY_TYPES_AR[order.delivery_type] || order.delivery_type})</Text>
+                    <Text style={[styles.detailValue, { color: '#00CEC9' }]}>+{formatCurrency(order.delivery_fee || 0)}</Text>
+                  </View>
+                  <View style={[styles.detailRow, styles.detailTotalRow, { borderTopColor: theme.colors.border }]}>
+                    <Text style={[styles.detailTotalLabel, { color: theme.colors.text }]}>الإجمالي للتحصيل</Text>
+                    <Text style={[styles.detailTotalValue, { color: theme.primary }]}>{formatCurrency(order.total)}</Text>
+                  </View>
+                </View>
+
                 {!!order.customer_address && (
-                  <View style={styles.addressBox}>
+                  <View style={styles.infoBox}>
                      <Ionicons name="map-outline" size={14} color={theme.colors.textSecondary} />
-                     <Text style={[styles.addressText, { color: theme.colors.textSecondary }]}>{order.customer_address}</Text>
+                     <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>{order.customer_address}</Text>
+                  </View>
+                )}
+
+                {!!order.notes && (
+                  <View style={styles.infoBox}>
+                     <Ionicons name="document-text-outline" size={14} color={theme.colors.textSecondary} />
+                     <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>{order.notes}</Text>
                   </View>
                 )}
 
@@ -332,6 +369,25 @@ export default function RegionalManagerOrders() {
                       >
                         <Text style={{ color: '#E17055', fontFamily: 'Tajawal_700Bold', fontSize: 13 }}>إرجاع</Text>
                       </TouchableOpacity>
+                    </View>
+                  )}
+                  
+                  {order.status === 'delivered' && (
+                    <View style={{ marginTop: spacing.xs }}>
+                      {order.cod_confirmed_at ? (
+                        <View style={styles.collectedBadge}>
+                          <Ionicons name="cash-outline" size={16} color="#2D6A4F" />
+                          <Text style={styles.collectedText}>تم تحصيل المبلغ</Text>
+                        </View>
+                      ) : (
+                        <Button 
+                          title="💰 تأكيد تحصيل المبلغ" 
+                          variant="outline" 
+                          style={{ borderColor: theme.primary }} 
+                          onPress={() => handleConfirmCod(order.id)} 
+                          loading={processingOrderId === order.id} 
+                        />
+                      )}
                     </View>
                   )}
 
@@ -503,10 +559,22 @@ const styles = StyleSheet.create({
   fastCallBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, backgroundColor: '#27AE60', paddingHorizontal: 12, paddingVertical: 6, borderRadius: borderRadius.sm },
   fastCallText: { color: '#FFF', fontSize: 12, fontFamily: 'Tajawal_700Bold' },
 
-  affiliateBox: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
-  affiliateText: { fontSize: 13 },
-  addressBox: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: spacing.xs },
-  addressText: { fontSize: 13, flex: 1, textAlign: 'right' },
+  infoBox: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, marginBottom: spacing.xs },
+  infoText: { fontSize: 13, flex: 1, textAlign: 'right' },
+  
+  detailsBox: { 
+    borderWidth: 1, 
+    borderRadius: borderRadius.md, 
+    padding: spacing.sm, 
+    marginVertical: spacing.xs,
+    gap: 8
+  },
+  detailRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
+  detailLabel: { fontSize: 13, fontFamily: 'Tajawal_500Medium' },
+  detailValue: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
+  detailTotalRow: { borderTopWidth: 1, paddingTop: 8, marginTop: 4 },
+  detailTotalLabel: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
+  detailTotalValue: { fontSize: 16, fontFamily: 'Tajawal_700Bold' },
 
   actionsContainer: { marginTop: spacing.xs, gap: spacing.sm },
   actionButtonsRow: { flexDirection: 'row-reverse', gap: spacing.sm },
@@ -519,6 +587,23 @@ const styles = StyleSheet.create({
   copyLinkBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderDashArray: [4, 4], borderWidth: 1, borderRadius: borderRadius.md, gap: 8 },
   revertBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderWidth: 1, borderRadius: borderRadius.md, gap: 6 },
   secondaryBtnText: { fontSize: 11, fontFamily: 'Tajawal_700Bold' },
+
+  collectedBadge: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: "rgba(45, 106, 79, 0.1)",
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: "rgba(45, 106, 79, 0.2)",
+  },
+  collectedText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_700Bold",
+    color: "#2D6A4F",
+  },
 
   sheetBody: { paddingBottom: spacing.xl },
   sheetInput: { borderWidth: 1, borderRadius: borderRadius.md, padding: spacing.md, height: 100, textAlign: 'right', marginBottom: spacing.md },

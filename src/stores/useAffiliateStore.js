@@ -2,6 +2,16 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { generateReferralCode } from '../lib/utils';
 
+// Helper: safe loading counter to prevent race conditions
+const _startLoading = (set, get) => {
+  const count = (get()._loadingCount || 0) + 1;
+  set({ _loadingCount: count, isLoading: true });
+};
+const _stopLoading = (set, get) => {
+  const count = Math.max(0, (get()._loadingCount || 1) - 1);
+  set({ _loadingCount: count, isLoading: count > 0 });
+};
+
 export const useAffiliateStore = create((set, get) => ({
   affiliateProfile: null,
   allAffiliateProfiles: [],
@@ -11,10 +21,11 @@ export const useAffiliateStore = create((set, get) => ({
   payoutRequests: [],
   stats: { clicks: 0, conversions: 0, earnings: 0, total_paid: 0, conversionRate: 0 },
   isLoading: false,
+  _loadingCount: 0,
 
   // Affiliate: join a store
   joinStore: async (storeId) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -44,15 +55,16 @@ export const useAffiliateStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   // Affiliate: get own profile for a store
   fetchAffiliateProfile: async (storeId) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error('Not authenticated');
 
       let query = supabase.from('affiliates').select('*').eq('user_id', user.id);
@@ -69,9 +81,10 @@ export const useAffiliateStore = create((set, get) => ({
       
       set({ allAffiliateProfiles: data || [] });
 
+      let activeProfile = null;
       // If we have a specific storeId, find it or heal it
       if (storeId) {
-        let activeProfile = data?.find(p => p.store_id === storeId);
+        activeProfile = data?.find(p => p.store_id === storeId);
         
         if (!activeProfile) {
           if (__DEV__) console.log('🩹 [fetchAffiliateProfile] Missing record found. Auto-healing for store:', storeId);
@@ -97,49 +110,60 @@ export const useAffiliateStore = create((set, get) => ({
         set({ affiliateProfile: data?.[0] || null });
       }
 
-      return { success: true, data: data?.[0] };
+      return { success: true, data: storeId ? activeProfile : data?.[0] };
     } catch (error) {
       if (__DEV__) console.error('💥 [fetchAffiliateProfile] Final Catch Error:', error);
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   // Merchant: view all affiliates for a store
   fetchStoreAffiliates: async (storeId) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
-      const { data, error } = await supabase
+      const { data: affiliates, error } = await supabase
         .from('affiliates')
         .select('*')
         .eq('store_id', storeId)
         .order('total_earnings', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ [fetchStoreAffiliates] Error:', error);
+        throw error;
+      }
       
-      // RADICAL FIX: Data Stitching for profiles
-      const userIds = [...new Set((data || []).map(a => a.user_id).filter(Boolean))];
-      if (userIds.length > 0) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('user_id, full_name, avatar_url, phone')
-          .in('user_id', userIds);
-          
-        if (profileData) {
-          const profileMap = profileData.reduce((acc, p) => ({ ...acc, [p.user_id]: p }), {});
-          data.forEach(a => {
-            if (profileMap[a.user_id]) a.profiles = profileMap[a.user_id];
-          });
-        }
+      if (!affiliates || affiliates.length === 0) {
+        set({ affiliates: [] });
+        return { success: true, data: [] };
       }
 
-      set({ affiliates: data || [] });
-      return { success: true, data };
+      // Fetch profiles in a separate query to avoid join relationship issues
+      const userIds = affiliates.map(a => a.user_id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('user_id, full_name, phone, avatar_url')
+        .in('user_id', userIds);
+
+      if (profileError) {
+        console.error('❌ [fetchStoreAffiliates] Profile Fetch Error:', profileError);
+        // Continue anyway with null profiles
+      }
+
+      const profileMap = (profiles || []).reduce((acc, p) => ({ ...acc, [p.user_id]: p }), {});
+      
+      const enrichedData = affiliates.map(item => ({
+        ...item,
+        profiles: profileMap[item.user_id] || null
+      }));
+
+      set({ affiliates: enrichedData });
+      return { success: true, data: enrichedData };
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
@@ -167,7 +191,7 @@ export const useAffiliateStore = create((set, get) => ({
 
   // Fetch referrals for an affiliate
   fetchReferrals: async (affiliateId) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const { data, error } = await supabase
         .from('referrals')
@@ -181,15 +205,16 @@ export const useAffiliateStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   // Fetch commissions for an affiliate (optionally filtered by store)
   fetchCommissions: async (storeId = null) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) throw new Error("Not authenticated");
 
       let query = supabase
@@ -221,7 +246,7 @@ export const useAffiliateStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
@@ -267,13 +292,14 @@ export const useAffiliateStore = create((set, get) => ({
   // Global Affiliate Statistics: Aggregate across ALL store affiliations
   fetchAffiliateStats: async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
 
       // 1. Fetch all store profiles for basic stats
       const { data: allProfiles, error } = await supabase
         .from('affiliates')
-        .select('id, total_clicks, total_conversions, total_earnings')
+        .select('id, total_clicks, total_conversions, total_earnings, available_balance')
         .eq('user_id', user.id);
 
       if (error) throw error;
@@ -290,8 +316,9 @@ export const useAffiliateStore = create((set, get) => ({
         acc.clicks += (p.total_clicks || 0);
         acc.conversions += (p.total_conversions || 0);
         acc.earnings += Number(p.total_earnings || 0);
+        acc.available_balance += Number(p.available_balance || 0);
         return acc;
-      }, { clicks: 0, conversions: 0, earnings: 0 });
+      }, { clicks: 0, conversions: 0, earnings: 0, available_balance: 0 });
 
       const totalPaid = (paidPayouts || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
@@ -331,7 +358,7 @@ export const useAffiliateStore = create((set, get) => ({
 
   // Payout Management: Fetch payout history (Admin global or User specific)
   fetchPayoutRequests: async (params = {}) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const isAdmin = params?.isAdmin === true;
       let query = supabase
@@ -354,7 +381,8 @@ export const useAffiliateStore = create((set, get) => ({
         query = query.eq('store_id', params.storeId);
       } else {
         // Default User Global View (Role-Aware Combined Filter)
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession();
+        const user = session?.user;
         if (!user) throw new Error("Not authenticated");
         
         const [{ data: userAffs }, { data: userStores }] = await Promise.all([
@@ -410,12 +438,12 @@ export const useAffiliateStore = create((set, get) => ({
       if (__DEV__) console.error('❌ [fetchPayoutRequests]', error);
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   createPayoutRequest: async (payoutData) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const { data, error } = await supabase
         .from('payout_requests')
@@ -429,12 +457,12 @@ export const useAffiliateStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 
   updatePayoutStatus: async (payoutId, status, adminNotes = null, extra = {}) => {
-    set({ isLoading: true });
+    _startLoading(set, get);
     try {
       const updateData = { status, ...extra };
       if (adminNotes) updateData.admin_notes = adminNotes;
@@ -457,7 +485,7 @@ export const useAffiliateStore = create((set, get) => ({
     } catch (error) {
       return { success: false, error: error.message };
     } finally {
-      set({ isLoading: false });
+      _stopLoading(set, get);
     }
   },
 }));

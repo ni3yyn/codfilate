@@ -17,6 +17,7 @@ const RAIL_ITEMS = [
   { name: "payouts", label: "السحوبات", icon: "wallet" },
   { name: "deliveries", label: "التوصيل", icon: "car" },
   { name: "fees", label: "الرسوم", icon: "pricetag" },
+  { name: "operations", label: "العمليات", icon: "pulse" },
 ];
 
 export default function AdminLayout() {
@@ -73,6 +74,10 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="fees"
         options={{ title: "الرسوم", tabBarIconName: "pricetag" }}
+      />
+      <Tabs.Screen
+        name="operations"
+        options={{ title: "العمليات", tabBarIconName: "pulse" }}
       />
       <Tabs.Screen name="assign-wilaya" options={{ href: null }} />
       <Tabs.Screen name="add-regional-manager" options={{ href: null }} />

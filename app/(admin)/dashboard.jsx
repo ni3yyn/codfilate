@@ -22,6 +22,7 @@ import UniversalHeader from "../../src/components/ui/UniversalHeader";
 import CustomAlert from "../../src/components/ui/CustomAlert";
 import { typography, spacing, borderRadius } from "../../src/theme/theme";
 import { formatCurrency } from "../../src/lib/utils";
+import SignOutButton from "../../src/components/ui/SignOutButton";
 
 export default function AdminDashboard() {
   const theme = useTheme();
@@ -53,13 +54,15 @@ export default function AdminDashboard() {
     todayOrders: 0,
     todayRevenue: 0,
     monthRevenue: 0,
+    productRevenue: 0,
+    deliveryRevenue: 0,
   });
 
   const loadStats = useCallback(async () => {
     try {
       const [storesRes, ordersRes, usersRes, metricsRes] = await Promise.all([
         supabase.from("stores").select("id, is_active"),
-        supabase.from("orders").select("total, status, created_at"),
+        supabase.from("orders").select("total, sale_price, delivery_fee, status, created_at"),
         supabase.from("profiles").select("id, role"),
         supabase.rpc("get_admin_platform_metrics"),
       ]);
@@ -91,6 +94,8 @@ export default function AdminDashboard() {
           m?.gmv_total != null
             ? Number(m.gmv_total)
             : orders.reduce((s, o) => s + Number(o.total), 0),
+        productRevenue: orders.reduce((s, o) => s + Number(o.sale_price || 0), 0),
+        deliveryRevenue: orders.reduce((s, o) => s + Number(o.delivery_fee || 0), 0),
         deliveredRevenue: deliveredOrders.reduce(
           (s, o) => s + Number(o.total),
           0,
@@ -264,26 +269,46 @@ export default function AdminDashboard() {
           />
         </View>
 
-        {/* Revenue Card */}
-        <Card
-          style={styles.revenueCard}
-          accentColor="#A29BFE"
-          accentPosition="left"
-        >
-          <View style={styles.revenueRow}>
-            <View style={styles.revenueInfo}>
-              <Text style={styles.revenueLabel}>رسوم المنصة المحصّلة</Text>
-              <Text style={[styles.revenueValue, { color: theme.colors.text }]}>
-                {formatCurrency(stats.platformFees)}
+        {/* Revenue Cards */}
+        <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.md }]}>
+          الإيرادات التفصيلية
+        </Text>
+        <View style={{ gap: spacing.sm }}>
+          <Card
+            style={styles.revenueCard}
+            accentColor="#A29BFE"
+            accentPosition="left"
+          >
+            <View style={styles.revenueRow}>
+              <View style={styles.revenueInfo}>
+                <Text style={styles.revenueLabel}>رسوم المنصة المحصّلة</Text>
+                <Text style={[styles.revenueValue, { color: theme.colors.text }]}>
+                  {formatCurrency(stats.platformFees)}
+                </Text>
+              </View>
+              <View
+                style={[styles.revenueIcon, { backgroundColor: "#A29BFE20" }]}
+              >
+                <Ionicons name="wallet-outline" size={24} color="#A29BFE" />
+              </View>
+            </View>
+          </Card>
+          
+          <View style={{ flexDirection: 'row-reverse', gap: spacing.md }}>
+            <Card style={[styles.revenueCard, { flex: 1, padding: spacing.md }]} accentColor="#00B894" accentPosition="right">
+              <Text style={[styles.revenueLabel, { textAlign: 'right' }]}>مبيعات المنتجات</Text>
+              <Text style={[styles.revenueValue, { color: theme.colors.text, fontSize: 18, marginTop: 4, textAlign: 'right' }]}>
+                {formatCurrency(stats.productRevenue)}
               </Text>
-            </View>
-            <View
-              style={[styles.revenueIcon, { backgroundColor: "#A29BFE20" }]}
-            >
-              <Ionicons name="wallet-outline" size={24} color="#A29BFE" />
-            </View>
+            </Card>
+            <Card style={[styles.revenueCard, { flex: 1, padding: spacing.md }]} accentColor="#0984E3" accentPosition="right">
+              <Text style={[styles.revenueLabel, { textAlign: 'right' }]}>إيرادات التوصيل</Text>
+              <Text style={[styles.revenueValue, { color: theme.colors.text, fontSize: 18, marginTop: 4, textAlign: 'right' }]}>
+                {formatCurrency(stats.deliveryRevenue)}
+              </Text>
+            </Card>
           </View>
-        </Card>
+        </View>
 
         {/* Users Overview */}
         <Text
@@ -399,16 +424,7 @@ export default function AdminDashboard() {
           </View>
         </Card>
 
-        <Button
-          title="تسجيل الخروج الآمن"
-          variant="secondary"
-          onPress={handleSignOut}
-          style={styles.signOutBtn}
-          textStyle={{ color: theme.error }}
-          icon={
-            <Ionicons name="log-out-outline" size={20} color={theme.error} />
-          }
-        />
+        <SignOutButton onPress={handleSignOut} label="تسجيل الخروج الآمن" />
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -482,12 +498,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     fontSize: 14,
     fontFamily: "Tajawal_700Bold",
-  },
-  signOutBtn: {
-    marginTop: spacing.xxl,
-    backgroundColor: "rgba(220, 38, 38, 0.08)",
-    borderColor: "rgba(220, 38, 38, 0.12)",
-    borderWidth: 1,
   },
   bottomSpacer: { height: 100 },
 });

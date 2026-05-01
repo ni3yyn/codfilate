@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
  * Importing `expo-notifications` at all triggers a fatal error there — skip entirely.
  */
 function canUseExpoPush() {
-  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'web') return true; // Web push is supported
   if (Constants.appOwnership === 'expo') return false;
   if (Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return false;
   return true;
@@ -36,7 +36,12 @@ export function usePushRegistration(userId) {
           return;
         }
 
-        if (!Device.isDevice) return;
+        if (Platform.OS === 'web' && typeof window !== 'undefined' && !('Notification' in window)) {
+          console.warn('[Push] Browser does not support notifications');
+          return;
+        }
+
+        if (Platform.OS !== 'web' && !Device.isDevice) return;
 
         const Notifications = await import('expo-notifications');
 
@@ -63,29 +68,75 @@ export function usePushRegistration(userId) {
           }
         });
 
-        const { status: existing } = await Notifications.getPermissionsAsync();
-        let finalStatus = existing;
-        if (existing !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus !== 'granted' || cancelled) return;
+        const registerForPushNotificationsAsync = async () => {
+          if (Platform.OS === 'web') {
+            try {
+              if (!('Notification' in window)) {
+                console.warn('[Push] Browser does not support notifications.');
+                return null;
+              }
 
-        const projectId =
-          process.env.EXPO_PUBLIC_PROJECT_ID ||
-          Constants.expoConfig?.extra?.eas?.projectId;
+              if (Notification.permission === 'granted') {
+                console.log('[Push] Native browser notifications enabled.');
+                return null;
+              }
 
-        const tokenData = projectId
-          ? await Notifications.getExpoPushTokenAsync({ projectId })
-          : await Notifications.getExpoPushTokenAsync();
+              if (Notification.permission !== 'denied') {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                  console.log('[Push] Native browser notification permission granted!');
+                }
+              }
+            } catch (err) {
+              console.error('[Push] Error requesting browser notification permission:', err);
+            }
+            return null;
+          }
 
-        const token = tokenData?.data;
+          if (!Device.isDevice) {
+            console.warn('[Push] Must use physical device for native Push Notifications');
+            return null;
+          }
+
+          const { status: existingStatus } = await Notifications.getPermissionsAsync();
+          let finalStatus = existingStatus;
+          if (existingStatus !== 'granted') {
+            const { status } = await Notifications.requestPermissionsAsync();
+            finalStatus = status;
+          }
+
+          if (finalStatus !== 'granted') {
+            console.warn('[Push] Failed to get push token for push notification!');
+            return null;
+          }
+
+          const projectId =
+            process.env.EXPO_PUBLIC_PROJECT_ID ||
+            Constants.expoConfig?.extra?.eas?.projectId;
+
+          if (!projectId) {
+            console.warn('[Push] Project ID not found');
+            return null;
+          }
+
+          try {
+            const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
+            return tokenData.data;
+          } catch (e) {
+            console.error('[Push] Error getting push token:', e);
+            return null;
+          }
+        };
+
+        const token = await registerForPushNotificationsAsync();
         if (!token || cancelled) return;
 
         if (tokenRef.current === token) return;
         tokenRef.current = token;
 
-        await supabase.from('push_tokens').upsert(
+        console.log('[Push] Saving token:', token, 'for user:', userId);
+
+        const { error: upsertError } = await supabase.from('push_tokens').upsert(
           {
             user_id: userId,
             expo_push_token: token,
@@ -94,8 +145,14 @@ export function usePushRegistration(userId) {
           },
           { onConflict: 'user_id,expo_push_token' }
         );
+
+        if (upsertError) {
+          console.error('[Push] Failed to save token to Supabase:', upsertError.message);
+        } else {
+          console.log('[Push] Token saved successfully!');
+        }
       } catch (e) {
-        if (__DEV__) console.warn('push registration', e);
+        if (__DEV__) console.warn('push registration error:', e);
       }
     })();
 

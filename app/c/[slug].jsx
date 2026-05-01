@@ -77,7 +77,7 @@ export default function PublicCampaignCheckoutScreen() {
 
       const { data: camp, error: ce } = await executeSupabase(() => supabase
         .from("marketing_campaigns")
-        .select("id, slug, sale_price, page_config, products(id, name, description, price, image_url, listing_status)")
+        .select("id, slug, sale_price, page_config, products(id, name, description, price, image_url, gallery_urls, product_images(*), listing_status)")
         .eq("slug", s).eq("is_active", true).maybeSingle());
 
       if (ce || !camp || camp.products?.listing_status !== "published") {

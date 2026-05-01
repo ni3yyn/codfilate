@@ -149,12 +149,12 @@ const styles = StyleSheet.create({
   },
   indicator: {
     position: 'absolute',
-    right: -12,
+    left: -12, // Inner edge for RTL (sidebar on the right)
     top: 12,
     bottom: 12,
     width: 4,
-    borderTopStartRadius: 4,
-    borderBottomStartRadius: 4,
+    borderTopEndRadius: 4,
+    borderBottomEndRadius: 4,
   },
   label: {
     ...typography.body,

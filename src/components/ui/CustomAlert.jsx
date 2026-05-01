@@ -5,11 +5,11 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Animated,
   Dimensions,
   BackHandler,
   Platform,
 } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { typography, spacing, borderRadius } from '../../theme/theme';
@@ -31,40 +31,24 @@ export default function CustomAlert({
   type = 'default', // 'default' | 'destructive' | 'success'
 }) {
   const theme = useTheme();
-  const [fadeAnim] = React.useState(new Animated.Value(0));
-  const [slideAnim] = React.useState(new Animated.Value(20));
+  const screenHeight = Dimensions.get('window').height;
 
   const [showModal, setShowModal] = React.useState(visible);
+
+  const translateY = useSharedValue(screenHeight);
+  const opacity = useSharedValue(0);
 
   React.useEffect(() => {
     if (visible) {
       setShowModal(true);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      translateY.value = withSpring(0, { damping: 30, stiffness: 300, mass: 0.8 });
+      opacity.value = withTiming(1, { duration: 200 });
     } else if (showModal) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 20,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setShowModal(false);
+      translateY.value = withSpring(screenHeight, { damping: 30, stiffness: 300, mass: 0.8 });
+      opacity.value = withTiming(0, { duration: 150 }, (finished) => {
+        if (finished) {
+          runOnJS(setShowModal)(false);
+        }
       });
     }
   }, [visible]);
@@ -83,24 +67,41 @@ export default function CustomAlert({
   }, [visible, onCancel]);
 
   // Web Browser Back Button Handler
+  const modalId = React.useRef('alert_' + Math.random().toString(36).substr(2, 9)).current;
+
   React.useEffect(() => {
     if (Platform.OS !== 'web' || !showModal || typeof window === 'undefined') return;
 
-    window.history.pushState({ customModalOpen: true }, '');
+    window.history.pushState({ modalId }, '');
 
-    const onPopState = () => {
-      if (onCancel) onCancel();
+    const onPopState = (e) => {
+      // Only close if our specific modal state was popped
+      if (e.state?.modalId !== modalId) {
+        if (onCancel) onCancel();
+      }
     };
 
     window.addEventListener('popstate', onPopState);
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (window.history.state?.customModalOpen) {
+      if (window.history.state?.modalId === modalId) {
         window.history.back();
       }
     };
   }, [showModal, onCancel]);
+
+  const overlayStyle = useAnimatedStyle(() => {
+    return {
+      opacity: opacity.value,
+    };
+  });
+
+  const alertStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
 
   if (!showModal) return null;
 
@@ -127,15 +128,15 @@ export default function CustomAlert({
       animationType="none"
       onRequestClose={onCancel}
     >
-      <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]}>
+      <Animated.View style={[styles.overlay, { backgroundColor: theme.colors.overlay }, overlayStyle]}>
         <Animated.View
           style={[
             styles.container,
             {
               backgroundColor: theme.colors.card,
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
+              borderColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
             },
+            alertStyle,
           ]}
         >
           <View style={[styles.iconContainer, { backgroundColor: getIconColor() + '15' }]}>
@@ -167,7 +168,7 @@ export default function CustomAlert({
             />
           </View>
         </Animated.View>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -177,37 +178,48 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   container: {
-    width: Math.min(width - 40, 400),
-    borderRadius: borderRadius.xl,
+    width: Math.min(width - 40, 420),
+    borderRadius: 32,
     padding: spacing.xl,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 10,
+      }
+    })
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   title: {
     ...typography.h3,
     textAlign: 'center',
     marginBottom: spacing.xs,
+    fontSize: 22,
+    fontFamily: 'Tajawal_700Bold',
   },
   message: {
     ...typography.body,
     textAlign: 'center',
     marginBottom: spacing.xl,
-    lineHeight: 22,
+    lineHeight: 24,
+    opacity: 0.8,
   },
   footer: {
     flexDirection: 'row',
@@ -216,8 +228,8 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    height: 48,
-    borderRadius: borderRadius.md,
+    height: 52,
+    borderRadius: 16,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -227,7 +239,8 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     flex: 1,
-    height: 48,
+    height: 52,
     marginVertical: 0,
+    borderRadius: 16,
   },
 });

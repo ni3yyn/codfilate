@@ -1,50 +1,59 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withRepeat, 
+  withTiming, 
+  Easing 
+} from 'react-native-reanimated';
 import { useTheme } from '../../hooks/useTheme';
 import { typography, spacing } from '../../theme/theme';
 
+/**
+ * Premium Loading Spinner.
+ * Upgraded to use react-native-reanimated for 60fps infinite loops on the UI thread.
+ */
 export default function LoadingSpinner({ size = 'large', style, message }) {
   const theme = useTheme();
-  const spinAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(0.8)).current;
+  
+  const rotation = useSharedValue(0);
+  const scale = useSharedValue(0.8);
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
+    // Continuous 360 rotation on UI thread
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 1200, easing: Easing.linear }),
+      -1, // infinite
+      false // don't reverse
+    );
 
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 600,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 0.8,
-          duration: 600,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
+    // Continuous pulse in/out
+    scale.value = withRepeat(
+      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true // reverse
+    );
   }, []);
 
-  const spinValue = spinAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+  const spinnerStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ rotate: `${rotation.value}deg` }],
+    };
+  });
+
+  const logoStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+      opacity: scale.value, 
+    };
   });
 
   const dotSize = size === 'large' ? 48 : 32;
 
   return (
     <View style={[styles.container, style]}>
+      {/* Outer Rotating Ring */}
       <Animated.View
         style={[
           styles.spinner,
@@ -55,10 +64,12 @@ export default function LoadingSpinner({ size = 'large', style, message }) {
             borderColor: theme.primary + '20',
             borderTopColor: theme.primary,
             borderRightColor: theme.primary + '60',
-            transform: [{ rotate: spinValue }],
           },
+          spinnerStyle
         ]}
       />
+      
+      {/* Inner Pulsing Logo */}
       <Animated.View
         style={[
           styles.logoContainer,
@@ -67,9 +78,8 @@ export default function LoadingSpinner({ size = 'large', style, message }) {
             height: dotSize - 16,
             borderRadius: (dotSize - 16) / 2,
             backgroundColor: theme.primary + '15',
-            opacity: pulseAnim,
-            transform: [{ scale: pulseAnim }],
           },
+          logoStyle
         ]}
       >
         <Text
@@ -84,6 +94,8 @@ export default function LoadingSpinner({ size = 'large', style, message }) {
           C
         </Text>
       </Animated.View>
+
+      {/* Optional Loading Message */}
       {message && (
         <Text style={[styles.message, { color: theme.colors.textSecondary }]}>
           {message}

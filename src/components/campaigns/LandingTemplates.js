@@ -8,8 +8,12 @@ import * as Haptics from 'expo-haptics';
 import { formatCurrency } from '../../lib/utils';
 import { DELIVERY_TYPES_AR } from '../../lib/constants';
 import { useRef, useEffect, useState } from 'react';
+import ImageGallery from '../common/ImageGallery';
 
 const AnimatedExpoImage = Animated.createAnimatedComponent(Image);
+
+const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/400x400.png?text=لا+توجد+صورة';
+
 
 
 // ==========================================
@@ -110,292 +114,9 @@ const DiagonalStripes = ({ color, width = 200, height = 200, style, position }) 
 // ==========================================
 // ENHANCED CAROUSEL WITH THUMBNAILS & GESTURES
 // ==========================================
-export const EnhancedImageCarousel = ({
-    images,
-    height = 400,
-    borderRadius = 20,
-    style,
-    showThumbnails = true,
-    autoplay = false,
-    autoplayInterval = 4000,
-    showArrows = true,
-    showCounter = true
-}) => {
-    const { width } = useWindowDimensions();
-    const scrollX = useRef(new Animated.Value(0)).current;
-    const flatListRef = useRef(null);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const autoplayTimer = useRef(null);
-
-    if (!images || images.length === 0) return null;
-
-    // Single image - simple display
-    if (images.length === 1) {
-        return (
-            <View style={[{ width: '100%', height, borderRadius, overflow: 'hidden' }, style]}>
-                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
-            </View>
-        );
-    }
-
-    // Autoplay logic
-    useEffect(() => {
-        if (autoplay && images.length > 1) {
-            autoplayTimer.current = setInterval(() => {
-                const nextIndex = (currentIndex + 1) % images.length;
-                flatListRef.current?.scrollToIndex({ index: nextIndex, animated: true });
-                setCurrentIndex(nextIndex);
-            }, autoplayInterval);
-        }
-        return () => {
-            if (autoplayTimer.current) clearInterval(autoplayTimer.current);
-        };
-    }, [autoplay, currentIndex, images.length, autoplayInterval]);
-
-    const handleScroll = Animated.event(
-        [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-        {
-            useNativeDriver: false,
-            listener: (event) => {
-                const offsetX = event.nativeEvent.contentOffset.x;
-                const index = Math.round(offsetX / width);
-                if (index !== currentIndex) {
-                    setCurrentIndex(index);
-                }
-            }
-        }
-    );
-
-    const scrollToIndex = (index) => {
-        flatListRef.current?.scrollToIndex({ index, animated: true });
-        setCurrentIndex(index);
-        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    };
-
-    const handlePrev = () => {
-        const prevIndex = currentIndex === 0 ? images.length - 1 : currentIndex - 1;
-        scrollToIndex(prevIndex);
-    };
-
-    const handleNext = () => {
-        const nextIndex = (currentIndex + 1) % images.length;
-        scrollToIndex(nextIndex);
-    };
-
-    return (
-        <View style={[{ width: '100%' }, style]}>
-            {/* Main Carousel */}
-            <View style={{ width: '100%', height, borderRadius, overflow: 'hidden', position: 'relative' }}>
-                <Animated.FlatList
-                    ref={flatListRef}
-                    data={images}
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    onScroll={handleScroll}
-                    scrollEventThrottle={16}
-                    keyExtractor={(_, i) => i.toString()}
-                    renderItem={({ item }) => (
-                        <View style={{ width, height }}>
-                            <Image source={{ uri: item }} style={styles.imgFill} contentFit="cover" transition={200} />
-                        </View>
-                    )}
-                    getItemLayout={(_, index) => ({
-                        length: width,
-                        offset: width * index,
-                        index,
-                    })}
-                />
-
-                {/* Image Counter Badge */}
-                {showCounter && (
-                    <View style={styles.counterBadge}>
-                        <Text style={styles.counterText}>
-                            {currentIndex + 1} / {images.length}
-                        </Text>
-                    </View>
-                )}
-
-                {/* Gradient Overlays for better arrow visibility */}
-                <LinearGradient
-                    colors={['rgba(0,0,0,0.3)', 'transparent']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0.15, y: 0 }}
-                    style={[styles.gradientOverlay, { left: 0 }]}
-                    pointerEvents="none"
-                />
-                <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.3)']}
-                    start={{ x: 0.85, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[styles.gradientOverlay, { right: 0 }]}
-                    pointerEvents="none"
-                />
-            </View>
-
-            {/* Pagination Dots */}
-            <View style={styles.paginationContainer}>
-                <View style={styles.paginationDotsRow}>
-                    {images.map((_, i) => {
-                        const widthAnim = scrollX.interpolate({
-                            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                            outputRange: [8, 28, 8],
-                            extrapolate: 'clamp'
-                        });
-                        const opacity = scrollX.interpolate({
-                            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                            outputRange: [0.4, 1, 0.4],
-                            extrapolate: 'clamp'
-                        });
-                        const backgroundColor = scrollX.interpolate({
-                            inputRange: [(i - 1) * width, i * width, (i + 1) * width],
-                            outputRange: ['#FFFFFF80', '#FFFFFF', '#FFFFFF80'],
-                            extrapolate: 'clamp'
-                        });
-
-                        return (
-                            <TouchableOpacity key={i} onPress={() => scrollToIndex(i)} activeOpacity={0.7}>
-                                <Animated.View
-                                    style={[
-                                        styles.carouselDot,
-                                        {
-                                            width: widthAnim,
-                                            opacity,
-                                            backgroundColor,
-                                        }
-                                    ]}
-                                />
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-            </View>
-
-            {/* Thumbnail Strip (Optional) */}
-            {showThumbnails && (
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.thumbnailContainer}
-                    style={{ marginTop: 12 }}
-                >
-                    {images.map((img, i) => (
-                        <TouchableOpacity
-                            key={i}
-                            onPress={() => scrollToIndex(i)}
-                            activeOpacity={0.8}
-                            style={[
-                                styles.thumbnailWrapper,
-                                currentIndex === i && styles.thumbnailActive
-                            ]}
-                        >
-                            <Image
-                                source={{ uri: img }}
-                                style={styles.thumbnail}
-                                contentFit="cover"
-                                transition={200}
-                            />
-                            {currentIndex === i && (
-                                <View style={styles.thumbnailOverlay}>
-                                    <View style={styles.thumbnailActiveIndicator} />
-                                </View>
-                            )}
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            )}
-
-            {/* Navigation Arrows */}
-            {showArrows && images.length > 1 && (
-                <>
-                    <TouchableOpacity
-                        style={[styles.navArrow, styles.leftArrow]}
-                        onPress={handlePrev}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="chevron-back" size={22} color="#FFF" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.navArrow, styles.rightArrow]}
-                        onPress={handleNext}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons name="chevron-forward" size={22} color="#FFF" />
-                    </TouchableOpacity>
-                </>
-            )}
-        </View>
-    );
-};
-
-// Simple Image Gallery (Fallback/Alternative)
-export const SimpleImageGallery = ({ images, height = 400, borderRadius = 20, style }) => {
-    const { width } = useWindowDimensions();
-    const [activeIndex, setActiveIndex] = useState(0);
-
-    if (!images || images.length === 0) return null;
-
-    if (images.length === 1) {
-        return (
-            <View style={[{ width: '100%', height, borderRadius, overflow: 'hidden' }, style]}>
-                <Image source={{ uri: images[0] }} style={styles.imgFill} contentFit="cover" transition={200} />
-            </View>
-        );
-    }
-
-    return (
-        <View style={[{ width: '100%', height }, style]}>
-            <ScrollView
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScroll={(e) => {
-                    const offset = e.nativeEvent.contentOffset.x;
-                    setActiveIndex(Math.round(offset / width));
-                }}
-                scrollEventThrottle={16}
-            >
-                {images.map((img, i) => (
-                    <View key={i} style={{ width, height }}>
-                        <Image source={{ uri: img }} style={[styles.imgFill, { borderRadius }]} contentFit="cover" transition={200} />
-                    </View>
-                ))}
-            </ScrollView>
-
-            {/* Dots Indicator */}
-            <View style={styles.simpleDotsContainer}>
-                {images.map((_, i) => (
-                    <View
-                        key={i}
-                        style={[
-                            styles.simpleDot,
-                            {
-                                backgroundColor: i === activeIndex ? '#FFF' : '#FFFFFF60',
-                                width: i === activeIndex ? 24 : 8
-                            }
-                        ]}
-                    />
-                ))}
-            </View>
-        </View>
-    );
-};
-
-// Modern Image Gallery (Uses Enhanced Carousel)
-export const ModernImageGallery = ({ images, height = 400, borderRadius = 20, style }) => {
-    return (
-        <EnhancedImageCarousel
-            images={images}
-            height={height}
-            borderRadius={borderRadius}
-            style={style}
-            showThumbnails={true}
-            autoplay={false}
-            showArrows={true}
-            showCounter={true}
-        />
-    );
-};
+export const EnhancedImageCarousel = (props) => <ImageGallery {...props} showDownload={false} />;
+export const SimpleImageGallery = (props) => <ImageGallery {...props} showDownload={false} showThumbnails={false} />;
+export const ModernImageGallery = (props) => <ImageGallery {...props} showDownload={false} />;
 
 // ==========================================
 // ADVANCED SHIMMER BUTTON
@@ -1051,7 +772,17 @@ export const ArtisanTemplate = (props) => {
         { icon: 'flash', color: '#7b5400', bg: 'rgba(123,84,0,0.1)', title: 'توصيل سريع', desc: 'شحن آمن وسريع لجميع الولايات مع الدفع عند الاستلام.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#f9f6f3' }}>
@@ -1146,7 +877,17 @@ export const SupremeTemplate = (props) => {
         { icon: 'rocket', color: '#111827', bg: '#F3F4F6', title: 'سرعة التنفيذ', desc: 'يصلك طلبك في وقت قياسي.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
@@ -1227,7 +968,17 @@ export const CyberTemplate = (props) => {
         { icon: 'flash', color: '#00E6CC', title: 'استجابة فورية', desc: 'توصيل سريع كسرعة الضوء.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#09090E' }}>
@@ -1317,7 +1068,17 @@ export const EleganceTemplate = (props) => {
         { icon: 'gift', color: '#D4AF37', title: 'تغليف فاخر', desc: 'هدية مثالية لك ولمن تحب.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#FAF7F2' }}>
@@ -1407,7 +1168,17 @@ export const BeastTemplate = (props) => {
         { icon: 'car', color: '#FF3B30', title: 'توصيل لـ 58 ولاية', desc: 'شحن سريع ومضمون لأي مكان.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#000000' }}>
@@ -1496,7 +1267,17 @@ export const TrendTemplate = (props) => {
         { title: 'ألوان جذابة', desc: 'تشكيلة متنوعة تناسب جميع الأذواق والمناسبات.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#FAFAFA' }}>
@@ -1570,7 +1351,17 @@ export const AuraTemplate = (props) => {
         { icon: 'heart', title: 'مقاسات دقيقة', desc: 'متوفر بجميع المقاسات مع إمكانية التعديل.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: 'rgba(255,245,245,0.9)' }}>
@@ -1644,7 +1435,17 @@ export const KicksTemplate = (props) => {
         { icon: 'shield', title: 'ضمان الجودة', desc: 'ضمان لمدة سنة ضد عيوب التصنيع.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#0F0F11' }}>
@@ -1709,7 +1510,17 @@ export const HomeFixTemplate = (props) => {
         { icon: 'shield', title: 'ضمان طويل', desc: 'ضمان شامل لمدة عامين.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F0F4F8' }}>
@@ -1776,7 +1587,17 @@ export const CandyTemplate = (props) => {
         { icon: 'heart', title: 'نتائج مضمونة', desc: 'فعالية مثبتة من آلاف العملاء.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#FFF0F5' }}>
@@ -1852,7 +1673,17 @@ export const ActiveTemplate = (props) => {
         { icon: 'flash', title: 'نتائج سريعة', desc: 'احصل على نتائج ملحوظة بسرعة.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#121212' }}>
@@ -1915,7 +1746,17 @@ export const CraveTemplate = (props) => {
         { icon: 'time', title: 'تحضير سريع', desc: 'جاهز في دقائق معدودة.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const getImages = () => {
+        const defaultImgs = [
+            campaign.products?.image_url,
+            ...(campaign.products?.gallery_urls || []),
+            ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+        ].filter(Boolean);
+        const unique = [...new Set(defaultImgs)];
+        if (config.images && config.images.length > 0) return config.images;
+        return unique.length > 0 ? unique : [PLACEHOLDER_IMAGE];
+    };
+    const images = getImages();
 
     return (
         <View style={{ flex: 1, backgroundColor: '#FFF8F0' }}>
@@ -1979,7 +1820,13 @@ export const LumberTemplate = (props) => {
         { icon: 'construct', title: 'سهل التركيب', desc: 'تعليمات واضحة وأدوات مرفقة.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const defaultImages = [
+        campaign.products?.image_url,
+        ...(campaign.products?.gallery_urls || []),
+        ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+    ].filter(Boolean);
+    const uniqueImages = [...new Set(defaultImages)];
+    const images = config.images?.length ? config.images : uniqueImages;
 
     return (
         <View style={{ flex: 1, backgroundColor: '#F5F5F0' }}>
@@ -2045,7 +1892,13 @@ export const NexusTemplate = (props) => {
         { icon: 'eye', title: 'شاشة مذهلة', desc: 'جودة عرض استثنائية.' }
     ]);
 
-    const images = config.images?.length ? config.images : [campaign.products?.image_url].filter(Boolean);
+    const defaultImages = [
+        campaign.products?.image_url,
+        ...(campaign.products?.gallery_urls || []),
+        ...(campaign.products?.product_images?.map(img => img.image_url) || [])
+    ].filter(Boolean);
+    const uniqueImages = [...new Set(defaultImages)];
+    const images = config.images?.length ? config.images : uniqueImages;
 
     return (
         <View style={{ flex: 1, backgroundColor: '#0A192F' }}>

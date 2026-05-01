@@ -101,20 +101,25 @@ export default function BottomSheet({
   }, [onClose]);
 
   // Web Browser Back Button Handler
+  const modalId = useRef('sheet_' + Math.random().toString(36).substr(2, 9)).current;
+
   useEffect(() => {
     if (Platform.OS !== 'web' || !showModal || typeof window === 'undefined') return;
 
-    window.history.pushState({ customModalOpen: true }, '');
+    window.history.pushState({ modalId }, '');
 
-    const onPopState = () => {
-      if (latestOnClose.current) latestOnClose.current();
+    const onPopState = (e) => {
+      // Only close if our specific modal state was popped
+      if (e.state?.modalId !== modalId) {
+        if (latestOnClose.current) latestOnClose.current();
+      }
     };
 
     window.addEventListener('popstate', onPopState);
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (window.history.state?.customModalOpen) {
+      if (window.history.state?.modalId === modalId) {
         window.history.back();
       }
     };
@@ -244,8 +249,8 @@ const styles = StyleSheet.create({
     width: '90%',
   },
   sheetContainer: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     paddingBottom: Platform.OS === 'ios' ? 40 : 16,
     overflow: 'hidden',
     flexShrink: 1,
@@ -254,9 +259,16 @@ const styles = StyleSheet.create({
     })
   },
   sheetContainerCentered: {
-    borderRadius: borderRadius.xl,
-    borderBottomLeftRadius: borderRadius.xl,
-    borderBottomRightRadius: borderRadius.xl,
+    borderRadius: 32,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+      }
+    })
   },
   handleContainer: {
     alignItems: 'center',
@@ -271,7 +283,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
     paddingBottom: spacing.md,
   },
   titleGroup: {
@@ -281,6 +294,8 @@ const styles = StyleSheet.create({
   title: {
     ...typography.h3,
     textAlign: 'right',
+    fontSize: 24,
+    fontFamily: 'Tajawal_700Bold',
   },
   scrollView: {
     flexShrink: 1,
@@ -292,17 +307,18 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.caption,
     textAlign: 'right',
-    marginTop: 2,
+    marginTop: 4,
+    opacity: 0.8,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   content: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xl,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -7,46 +7,54 @@ import {
   RefreshControl,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
+  Clipboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import { ScrollView } from "react-native-gesture-handler";
+
+// Hooks & Stores
 import { useTheme } from "../../src/hooks/useTheme";
 import { supabase } from "../../src/lib/supabase";
+import { useAlertStore } from "../../src/stores/useAlertStore";
+
+// UI Components
 import Button from "../../src/components/ui/Button";
 import Card from "../../src/components/ui/Card";
-import Badge from "../../src/components/ui/Badge";
 import Avatar from "../../src/components/ui/Avatar";
 import EmptyState from "../../src/components/ui/EmptyState";
 import LoadingSpinner from "../../src/components/ui/LoadingSpinner";
 import UniversalHeader from "../../src/components/ui/UniversalHeader";
-import {
-  typography,
-  spacing,
-  borderRadius,
-  gradients,
-} from "../../src/theme/theme";
+import ResponsiveModal from "../../src/components/ui/ResponsiveModal";
+
+// Theme & Utils
+import { typography, spacing, borderRadius } from "../../src/theme/theme";
 import { formatDate } from "../../src/lib/utils";
 
+// ─── Constants ──────────────────────────────────────────────────────────────
 const ROLE_AR = {
   admin: "الإدارة العليا",
   merchant: "تاجر",
   affiliate: "مسوق",
-  regional_manager: "المدير الإقليمي",
+  regional_manager: "مدير إقليمي",
 };
+
 const ROLE_COLORS = {
-  admin: "#FF6B6B",
-  merchant: "#6C5CE7",
-  affiliate: "#00CEC9",
-  regional_manager: "#0984E3",
+  admin: "#EF4444",         // Red
+  merchant: "#8B5CF6",      // Purple
+  affiliate: "#10B981",     // Green
+  regional_manager: "#3B82F6", // Blue
 };
+
 const ROLE_ICONS = {
-  admin: "shield",
+  admin: "shield-checkmark",
   merchant: "storefront",
   affiliate: "megaphone",
-  regional_manager: "map-outline",
+  regional_manager: "map",
 };
+
 const ROLE_FILTERS = [
   { key: "all", label: "الكل", icon: "people-outline" },
   { key: "admin", label: "الإدارة العليا", icon: "shield-outline" },
@@ -55,28 +63,83 @@ const ROLE_FILTERS = [
   { key: "regional_manager", label: "مدير إقليمي", icon: "map-outline" },
 ];
 
-/** أربعة أدوار فقط — الإدارة العليا، المدير الإقليمي، التاجر، المسوق */
 const ASSIGNABLE_ROLES = ["admin", "merchant", "affiliate", "regional_manager"];
 
+// ─── Memoized User Card ──────────────────────────────────────────────────────
+const UserCard = React.memo(({ item, onPress, theme, isWide, isTablet }) => {
+  const roleColor = ROLE_COLORS[item.role] || theme.primary;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={() => onPress(item)}
+      style={isWide ? styles.cardWrapperDesktop : isTablet ? styles.cardWrapperTablet : styles.cardWrapperMobile}
+    >
+      <Card style={[styles.userCard, { borderColor: theme.colors.border }]}>
+        <View style={[styles.accentEdge, { backgroundColor: roleColor }]} />
+
+        <View style={styles.userRow}>
+          <Avatar
+            name={item.full_name}
+            imageUrl={item.avatar_url}
+            size={52}
+            showRing
+            ringColor={roleColor}
+          />
+
+          <View style={styles.userInfo}>
+            <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
+              {item.full_name || "بدون اسم"}
+            </Text>
+            <View style={styles.metaRow}>
+              <Ionicons name="calendar-outline" size={13} color={theme.colors.textTertiary} />
+              <Text style={[styles.userDate, { color: theme.colors.textTertiary }]}>
+                انضم {formatDate(item.created_at)}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.userRight}>
+            <View style={[styles.roleBadge, { backgroundColor: roleColor + "15", borderColor: roleColor + "30" }]}>
+              <Text style={[styles.roleBadgeText, { color: roleColor }]}>
+                {ROLE_AR[item.role] || item.role}
+              </Text>
+              <Ionicons name={ROLE_ICONS[item.role] || "person"} size={12} color={roleColor} />
+            </View>
+            <Ionicons name="chevron-back" size={16} color={theme.colors.textSecondary} />
+          </View>
+        </View>
+      </Card>
+    </TouchableOpacity>
+  );
+});
+
+// ─── Main Component ────────────────────────────────────────────────────────
 export default function AdminUsers() {
   const theme = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const { showAlert } = useAlertStore();
+
+  const isDesktop = width > 1100;
+  const isTablet = width > 700 && width <= 1100;
+  const numColumns = isDesktop ? 3 : isTablet ? 2 : 1;
+
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [roleFilter, setRoleFilter] = useState("all");
   const [search, setSearch] = useState("");
-  const [expandedUser, setExpandedUser] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .order("created_at", { ascending: false });
 
-      const { data, error } = await query;
       if (error) throw error;
       setUsers(data || []);
     } catch (err) {
@@ -86,9 +149,7 @@ export default function AdminUsers() {
     }
   }, []);
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -96,457 +157,385 @@ export default function AdminUsers() {
     setRefreshing(false);
   };
 
-  const filteredUsers = users.filter((u) => {
-    const matchesRole = roleFilter === "all" || u.role === roleFilter;
-    const matchesSearch =
-      !search ||
-      (u.full_name || "").toLowerCase().includes(search.toLowerCase());
-    return matchesRole && matchesSearch;
-  });
+  const setUserRole = useCallback(async (profileId, role) => {
+    const { error } = await supabase.from("profiles").update({ role }).eq("id", profileId);
+    if (error) {
+      if (__DEV__) console.error(error);
+      showAlert({ title: "خطأ", message: "فشل تحديث الدور", type: "error" });
+      return;
+    }
+    loadUsers();
+    setSelectedUser(prev => prev && prev.id === profileId ? { ...prev, role } : prev);
+    showAlert({ title: "تم التحديث", message: "تم تغيير دور المستخدم بنجاح", type: "success" });
+  }, [loadUsers, showAlert]);
 
-  const roleCounts = {
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchesRole = roleFilter === "all" || u.role === roleFilter;
+      const matchesSearch = !search || (u.full_name || "").toLowerCase().includes(search.toLowerCase());
+      return matchesRole && matchesSearch;
+    });
+  }, [users, roleFilter, search]);
+
+  const roleCounts = useMemo(() => ({
     all: users.length,
     admin: users.filter((u) => u.role === "admin").length,
     merchant: users.filter((u) => u.role === "merchant").length,
     affiliate: users.filter((u) => u.role === "affiliate").length,
     regional_manager: users.filter((u) => u.role === "regional_manager").length,
+  }), [users]);
+
+  const handleCopyId = (id) => {
+    if (!id) return;
+    Clipboard.setString(id);
+    showAlert({ title: "تم النسخ", message: "تم نسخ المعرف بنجاح", type: "success" });
   };
 
-  const setUserRole = async (profileId, role) => {
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role })
-      .eq("id", profileId);
-    if (error) {
-      if (__DEV__) console.error(error);
-      return;
-    }
-    loadUsers();
-  };
+  const renderItem = useCallback(({ item }) => (
+    <UserCard
+      item={item}
+      onPress={setSelectedUser}
+      theme={theme}
+      isWide={isDesktop}
+      isTablet={isTablet}
+    />
+  ), [theme, isDesktop, isTablet]);
 
-  const renderUser = ({ item }) => {
-    const isExpanded = expandedUser === item.id;
-    const roleColor = ROLE_COLORS[item.role] || theme.primary;
+  const ListHeader = () => (
+    <View style={styles.headerContainer}>
+      <View style={styles.topActionsRow}>
+        <View style={styles.actionGroupRight}>
+          <TouchableOpacity
+            onPress={() => router.push("/(admin)/add-regional-manager")}
+            style={[styles.dashboardActionBtn, { backgroundColor: theme.primary }]}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add-circle" size={18} color="#FFF" />
+            <Text style={[styles.dashboardActionText, { color: '#FFF' }]}>إضافة مدير إقليمي</Text>
+          </TouchableOpacity>
 
-    return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => setExpandedUser(isExpanded ? null : item.id)}
-      >
-        <Card
-          style={styles.userCard}
-          accentColor={roleColor}
-          accentPosition="left"
-        >
-          <View style={styles.userRow}>
-            <Avatar
-              name={item.full_name}
-              imageUrl={item.avatar_url}
-              size={48}
-              showRing
-              ringColor={roleColor}
-            />
-            <View style={styles.userInfo}>
-              <Text style={[styles.userName, { color: theme.colors.text }]}>
-                {item.full_name || "بدون اسم"}
-              </Text>
-              <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Ionicons
-                  name="calendar-outline"
-                  size={12}
-                  color={theme.colors.textTertiary}
-                  style={{ marginEnd: 4 }}
-                />
-                <Text
-                  style={[
-                    styles.userDate,
-                    { color: theme.colors.textTertiary },
-                  ]}
-                >
-                  انضم {formatDate(item.created_at)}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.userRight}>
-              <LinearGradient
-                colors={[roleColor, roleColor + "CC"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.roleBadge}
-              >
-                <Ionicons
-                  name={ROLE_ICONS[item.role] || "person"}
-                  size={12}
-                  color="#FFFFFF"
-                  style={{ marginEnd: 4 }}
-                />
-                <Text style={styles.roleBadgeText}>
-                  {ROLE_AR[item.role] || item.role}
-                </Text>
-              </LinearGradient>
-            </View>
-          </View>
+          <TouchableOpacity
+            onPress={() => router.push("/(admin)/pending-merchants")}
+            style={[styles.dashboardActionBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderWidth: 1 }]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="time" size={18} color={theme.colors.textSecondary} />
+            <Text style={[styles.dashboardActionText, { color: theme.colors.textSecondary }]}>تجار معلقون</Text>
+          </TouchableOpacity>
+        </View>
 
-          {isExpanded && (
-            <View
-              style={[
-                styles.expandedContent,
-                { borderTopColor: theme.colors.divider },
-              ]}
-            >
-              <View
-                style={[
-                  styles.detailsBox,
-                  { backgroundColor: theme.colors.shimmer },
-                ]}
-              >
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    المعرف:
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: theme.colors.text }]}
-                    numberOfLines={1}
-                  >
-                    {item.user_id?.substring(0, 16)}...
-                  </Text>
-                </View>
-                {item.phone && (
-                  <View style={styles.detailRow}>
-                    <Ionicons
-                      name="call-outline"
-                      size={12}
-                      color={theme.colors.textSecondary}
-                      style={{ marginEnd: 4 }}
-                    />
-                    <Text
-                      style={[
-                        styles.detailLabel,
-                        { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      الهاتف:
-                    </Text>
-                    <Text
-                      style={[styles.detailValue, { color: theme.colors.text }]}
-                    >
-                      {item.phone}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    الدور:
-                  </Text>
-                  <Text style={[styles.detailValue, { color: roleColor }]}>
-                    {ROLE_AR[item.role] || item.role}
-                  </Text>
-                </View>
-                {item.store_id && (
-                  <View style={styles.detailRow}>
-                    <Ionicons
-                      name="storefront-outline"
-                      size={12}
-                      color={theme.colors.textSecondary}
-                      style={{ marginEnd: 4 }}
-                    />
-                    <Text
-                      style={[
-                        styles.detailLabel,
-                        { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      المتجر:
-                    </Text>
-                    <Text
-                      style={[styles.detailValue, { color: theme.colors.text }]}
-                      numberOfLines={1}
-                    >
-                      {item.store_id.substring(0, 16)}...
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    📅 تاريخ الإنشاء:
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: theme.colors.text }]}
-                  >
-                    {formatDate(item.created_at)}
-                  </Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    🔄 آخر تحديث:
-                  </Text>
-                  <Text
-                    style={[styles.detailValue, { color: theme.colors.text }]}
-                  >
-                    {formatDate(item.updated_at)}
-                  </Text>
-                </View>
-                <View style={{ marginTop: 12, gap: 8 }}>
-                  <Text
-                    style={[
-                      styles.detailLabel,
-                      { color: theme.colors.textSecondary },
-                    ]}
-                  >
-                    تغيير الدور
-                  </Text>
-                  <View
-                    style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}
-                  >
-                    {ASSIGNABLE_ROLES.map((r) => (
-                      <Button
-                        key={r}
-                        title={ROLE_AR[r]}
-                        variant={item.role === r ? "gradient" : "outline"}
-                        size="sm"
-                        fullWidth={false}
-                        onPress={() => setUserRole(item.id, r)}
-                        style={{ paddingHorizontal: 10 }}
-                      />
-                    ))}
-                  </View>
-                  {item.role === "regional_manager" && (
-                    <Button
-                      title="تعيين الولايات"
-                      variant="secondary"
-                      onPress={() =>
-                        router.push({
-                          pathname: "/(admin)/assign-wilaya",
-                          params: { profileId: item.id },
-                        })
-                      }
-                    />
-                  )}
-                </View>
-              </View>
-            </View>
-          )}
-        </Card>
-      </TouchableOpacity>
-    );
-  };
-
-  return (
-    <SafeAreaView
-      style={[styles.safe, { backgroundColor: theme.colors.background }]}
-      edges={["bottom"]}
-    >
-      <UniversalHeader
-        title="المستخدمين"
-        rightAction={
-          <Badge label={`${users.length} المجموع`} variant="primary" />
-        }
-      />
-
-      <View
-        style={{
-          flexDirection: "row",
-          gap: spacing.sm,
-          paddingHorizontal: spacing.md,
-          marginBottom: spacing.sm,
-        }}
-      >
-        <Button
-          title="إضافة مدير إقليمي"
-          variant="gradient"
-          size="sm"
-          fullWidth={false}
-          onPress={() => router.push("/(admin)/add-regional-manager")}
-          style={{ flex: 1 }}
-        />
-        <Button
-          title="تجار معلقون"
-          variant="outline"
-          size="sm"
-          fullWidth={false}
-          onPress={() => router.push("/(admin)/pending-merchants")}
-          style={{ flex: 1 }}
-        />
+        <View style={[styles.totalUsersBadge, { backgroundColor: theme.primary + '15' }]}>
+          <Text style={[styles.totalUsersText, { color: theme.primary }]}>
+            {users.length} مستخدم
+          </Text>
+        </View>
       </View>
 
-      {/* Search */}
-      <View
-        style={[
-          styles.searchContainer,
-          {
-            backgroundColor: theme.colors.surface,
-            borderColor: theme.colors.border,
-          },
-        ]}
-      >
-        <Ionicons
-          name="search-outline"
-          size={18}
-          color={theme.colors.textTertiary}
-        />
+      <View style={[styles.searchBox, { backgroundColor: theme.colors.surface, borderColor: search ? theme.primary : theme.colors.border }]}>
+        <Ionicons name="search" size={20} color={search ? theme.primary : theme.colors.textTertiary} />
         <TextInput
           style={[styles.searchInput, { color: theme.colors.text }]}
-          placeholder="بحث بالاسم..."
+          placeholder="ابحث عن طريق الاسم..."
           placeholderTextColor={theme.colors.textTertiary}
           value={search}
           onChangeText={setSearch}
         />
         {search.length > 0 && (
-          <TouchableOpacity onPress={() => setSearch("")}>
-            <Ionicons
-              name="close-circle"
-              size={18}
-              color={theme.colors.textTertiary}
-            />
+          <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="close-circle" size={20} color={theme.colors.textTertiary} />
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Role Filters */}
-      <View style={styles.filters}>
-        {ROLE_FILTERS.map((f) => (
-          <TouchableOpacity
-            key={f.key}
-            onPress={() => setRoleFilter(f.key)}
-            activeOpacity={0.7}
-            style={[
-              styles.filterBtn,
-              {
-                backgroundColor:
-                  roleFilter === f.key
-                    ? theme.primary
-                    : theme.isDark
-                      ? theme.colors.surface2
-                      : theme.colors.surface3,
-                borderColor:
-                  roleFilter === f.key ? theme.primary : "transparent",
-                borderWidth: 1,
-              },
-            ]}
-          >
-            <Text
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterScroll}
+        style={styles.filterWrapper}
+      >
+        {ROLE_FILTERS.map((f) => {
+          const isActive = roleFilter === f.key;
+          return (
+            <TouchableOpacity
+              key={f.key}
+              onPress={() => setRoleFilter(f.key)}
+              activeOpacity={0.7}
               style={[
-                styles.filterText,
+                styles.filterPill,
                 {
-                  color:
-                    roleFilter === f.key
-                      ? "#FFFFFF"
-                      : theme.colors.textSecondary,
-                },
+                  backgroundColor: isActive ? theme.primary : theme.colors.surface,
+                  borderColor: isActive ? theme.primary : theme.colors.border,
+                }
               ]}
             >
-              {f.label} ({roleCounts[f.key]})
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+              <Text style={[styles.filterText, { color: isActive ? "#FFF" : theme.colors.textSecondary }]}>
+                {f.label} ({roleCounts[f.key]})
+              </Text>
+              <Ionicons name={f.icon} size={14} color={isActive ? "#FFF" : theme.colors.textSecondary} />
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
 
-      {isLoading && users.length === 0 ? (
-        <LoadingSpinner message="جارٍ تحميل المستخدمين..." />
+  return (
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={["bottom"]}>
+      <UniversalHeader title="إدارة المستخدمين" subtitle="مراقبة وتعديل صلاحيات الحسابات" />
+
+      {isLoading && !refreshing ? (
+        <LoadingSpinner />
       ) : (
         <FlatList
           data={filteredUsers}
-          renderItem={renderUser}
+          renderItem={renderItem}
           keyExtractor={(item) => item.id}
+          numColumns={numColumns}
+          key={numColumns}
+          columnWrapperStyle={numColumns > 1 ? styles.gridRow : undefined}
+          ListHeaderComponent={<ListHeader />}
           contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <EmptyState
               icon="people-outline"
               title="لا يوجد مستخدمين"
-              message={
-                search
-                  ? "لم يتم العثور على نتائج للبحث."
-                  : "لا يوجد مستخدمين مسجلين بعد."
-              }
+              message={search ? "لم يتم العثور على نتائج تطابق بحثك." : "لا يوجد مستخدمين مسجلين بعد."}
             />
           }
         />
       )}
+
+      <ResponsiveModal
+        visible={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+        title="إدارة المستخدم"
+      >
+        {selectedUser && (
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Avatar
+                name={selectedUser.full_name}
+                imageUrl={selectedUser.avatar_url}
+                size={80}
+                showRing
+                ringColor={ROLE_COLORS[selectedUser.role]}
+              />
+              <Text style={[styles.modalName, { color: theme.colors.text }]}>{selectedUser.full_name}</Text>
+              <View style={[styles.modalRoleBadge, { backgroundColor: ROLE_COLORS[selectedUser.role] + '20' }]}>
+                <Text style={{ color: ROLE_COLORS[selectedUser.role], fontFamily: 'Tajawal_700Bold' }}>
+                  {ROLE_AR[selectedUser.role]}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.detailsBox, { backgroundColor: theme.colors.surface2 }]}>
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>المعرف:</Text>
+                <TouchableOpacity onPress={() => handleCopyId(selectedUser.user_id)} style={styles.copyRow}>
+                  <Text style={[styles.detailValue, { color: theme.colors.text, fontFamily: 'monospace' }]}>
+                    {selectedUser.user_id?.substring(0, 20)}...
+                  </Text>
+                  <Ionicons name="copy-outline" size={16} color={theme.colors.textTertiary} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedUser.phone && (
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>الهاتف:</Text>
+                  <Text style={[styles.detailValue, { color: theme.colors.text }]}>{selectedUser.phone}</Text>
+                </View>
+              )}
+
+              <View style={styles.detailRow}>
+                <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>تاريخ الانضمام:</Text>
+                <Text style={[styles.detailValue, { color: theme.colors.text }]}>{formatDate(selectedUser.created_at)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.roleManagerArea}>
+              <Text style={[styles.sectionSubtitle, { color: theme.colors.text }]}>تغيير صلاحيات الحساب</Text>
+              <View style={styles.roleChipsGroup}>
+                {ASSIGNABLE_ROLES.map((r) => {
+                  const isActive = selectedUser.role === r;
+                  return (
+                    <TouchableOpacity
+                      key={r}
+                      onPress={() => !isActive && setUserRole(selectedUser.id, r)}
+                      style={[
+                        styles.roleChip,
+                        {
+                          backgroundColor: isActive ? ROLE_COLORS[r] : theme.colors.surface,
+                          borderColor: isActive ? ROLE_COLORS[r] : theme.colors.border,
+                        }
+                      ]}
+                    >
+                      <Text style={[styles.roleChipText, { color: isActive ? '#FFF' : theme.colors.textSecondary }]}>
+                        {ROLE_AR[r]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {selectedUser.role === "regional_manager" && (
+                <Button
+                  title="تعيين ولايات الإشراف"
+                  variant="outline"
+                  icon="map"
+                  onPress={() => {
+                    const id = selectedUser.id;
+                    setSelectedUser(null);
+                    router.push({ pathname: "/(admin)/assign-wilaya", params: { profileId: id } });
+                  }}
+                  style={styles.rmActionBtn}
+                />
+              )}
+            </View>
+          </View>
+        )}
+      </ResponsiveModal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginHorizontal: spacing.md,
-    paddingHorizontal: spacing.md,
+  list: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
+    paddingBottom: 120,
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 1400,
+  },
+  gridRow: {
+    gap: spacing.md,
+    justifyContent: 'flex-start',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+  },
+  cardWrapperDesktop: { flex: 1, maxWidth: '32.5%', minWidth: 340 },
+  cardWrapperTablet: { flex: 1, maxWidth: '48.5%', minWidth: 320 },
+  cardWrapperMobile: { width: '100%', marginBottom: spacing.md },
+  headerContainer: { paddingHorizontal: spacing.md, marginBottom: spacing.md },
+  topActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  actionGroupRight: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  dashboardActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: borderRadius.md,
-    borderWidth: 1,
+  },
+  dashboardActionText: { fontFamily: 'Tajawal_700Bold', fontSize: 13 },
+  totalUsersBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: borderRadius.full,
+  },
+  totalUsersText: { fontFamily: 'Tajawal_700Bold', fontSize: 13 },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    height: 52,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
     gap: spacing.sm,
     marginBottom: spacing.sm,
   },
   searchInput: {
     flex: 1,
+    height: '100%',
     ...typography.body,
-    paddingVertical: 0,
+    fontFamily: "Tajawal_500Medium",
     textAlign: "right",
   },
-  filters: {
+  filterWrapper: { height: 46, marginBottom: spacing.xs },
+  filterScroll: {
     flexDirection: "row",
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.xs,
-    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
   },
-  filterBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 3,
-    borderRadius: borderRadius.full,
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 18,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
   },
-  filterText: { ...typography.small, fontFamily: "Tajawal_500Medium" },
-  list: { padding: spacing.md, paddingTop: 0, paddingBottom: 120 },
-  userCard: { marginBottom: spacing.sm },
-  userRow: { flexDirection: "row", alignItems: "center" },
-  userInfo: { flex: 1, marginStart: spacing.md },
-  userName: { ...typography.bodyBold, marginBottom: 2 },
-  userDate: { ...typography.small },
-  userRight: { alignItems: "flex-end" },
+  filterText: { fontFamily: "Tajawal_700Bold", fontSize: 13 },
+  userCard: {
+    padding: 0,
+    overflow: "hidden",
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  accentEdge: { position: 'absolute', top: 0, bottom: 0, right: 0, width: 4 },
+  userRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: spacing.md,
+    paddingRight: spacing.md + 6,
+  },
+  userInfo: {
+    flex: 1,
+    alignItems: "flex-start",
+    marginHorizontal: spacing.md,
+  },
+  userName: { fontFamily: "Tajawal_800ExtraBold", fontSize: 16, marginBottom: 4, textAlign: 'right' },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  userDate: { fontFamily: "Tajawal_500Medium", fontSize: 12 },
+  userRight: { alignItems: "flex-end", gap: 10 },
   roleBadge: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
   },
-  roleBadgeText: {
-    ...typography.small,
-    color: "#FFFFFF",
-    fontFamily: "Tajawal_700Bold",
-    fontSize: 11,
+  roleBadgeText: { fontFamily: "Tajawal_700Bold", fontSize: 10 },
+  modalContent: {
+    paddingBottom: 20,
   },
-  expandedContent: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
+  modalHeader: {
+    alignItems: 'center',
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  modalName: {
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 22,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  modalRoleBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: borderRadius.full,
   },
   detailsBox: {
+    margin: spacing.md,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     gap: spacing.sm,
@@ -555,12 +544,48 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingVertical: 4,
   },
-  detailLabel: { ...typography.caption, flex: 1 },
-  detailValue: {
-    ...typography.caption,
-    fontFamily: "Tajawal_500Medium",
-    flex: 1.5,
-    textAlign: "left",
+  detailLabel: { fontFamily: "Tajawal_500Medium", fontSize: 13 },
+  detailValue: { fontFamily: "Tajawal_700Bold", fontSize: 14, textAlign: "left" },
+  copyRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    backgroundColor: 'rgba(0,0,0,0.05)', 
+    paddingHorizontal: 10, 
+    paddingVertical: 6, 
+    borderRadius: 8 
+  },
+  roleManagerArea: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  sectionSubtitle: { 
+    fontFamily: "Tajawal_800ExtraBold", 
+    fontSize: 15, 
+    textAlign: "right", 
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  roleChipsGroup: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: spacing.lg,
+  },
+  roleChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  roleChipText: { fontFamily: "Tajawal_700Bold", fontSize: 13 },
+  rmActionBtn: {
+    marginTop: spacing.xs,
+    borderStyle: 'dashed',
+    height: 50,
   },
 });

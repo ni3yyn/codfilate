@@ -17,6 +17,9 @@ import { useAuthStore } from "../../src/stores/useAuthStore";
 import { useTheme } from "../../src/hooks/useTheme";
 import Button from "../../src/components/ui/Button";
 import Input from "../../src/components/ui/Input";
+import { useWilayaStore } from "../../src/stores/useWilayaStore";
+import BottomSheet from "../../src/components/ui/BottomSheet";
+import FlatList from "react-native-gesture-handler"; // Or just FlatList from react-native
 import {
   typography,
   spacing,
@@ -40,8 +43,29 @@ export default function RegisterScreen() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState(ROLES.AFFILIATE);
   const [error, setError] = useState("");
+
+  const { wilayas, fetchWilayas } = useWilayaStore();
+  const [selectedWilaya, setSelectedWilaya] = useState(null);
+  const [wilayaModal, setWilayaModal] = useState(false);
+  const [wilayaSearch, setWilayaSearch] = useState("");
+
+  useEffect(() => {
+    fetchWilayas();
+  }, [fetchWilayas]);
+
+  const filteredWilayas = wilayas.filter((w) => {
+    if (!wilayaSearch) return true;
+    const q = wilayaSearch.toLowerCase();
+    return (
+      w.name.includes(wilayaSearch) ||
+      (w.name_fr || "").toLowerCase().includes(q) ||
+      w.code.includes(q)
+    );
+  });
 
   const headerAnim = useRef(new Animated.Value(0)).current;
   const formAnim = useRef(new Animated.Value(30)).current;
@@ -72,12 +96,16 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     setError("");
-    if (!fullName.trim() || !email.trim() || !password.trim()) {
-      setError("يرجى ملء جميع الحقول");
+    if (!fullName.trim() || !email.trim() || !password.trim() || !phone.trim() || !selectedWilaya) {
+      setError("يرجى ملء جميع الحقول المطلوبة");
       return;
     }
     if (password.length < 6) {
       setError("يجب أن تتكون كلمة المرور من 6 أحرف على الأقل");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("كلمتا المرور غير متطابقتين");
       return;
     }
 
@@ -87,7 +115,7 @@ export default function RegisterScreen() {
       return;
     }
 
-    const result = await signUp(email.trim(), password, role, fullName.trim());
+    const result = await signUp(email.trim(), password, role, fullName.trim(), phone.trim(), selectedWilaya?.id);
     if (!result.success) {
       setError(result.error);
       return;
@@ -101,6 +129,8 @@ export default function RegisterScreen() {
     const profile = useAuthStore.getState().profile;
     if (role === ROLES.MERCHANT && profile?.onboarding_completed === false) {
       router.replace("/(merchant)/onboarding");
+    } else if (role === ROLES.AFFILIATE && profile?.onboarding_completed === false) {
+      router.replace("/(affiliate)/onboarding");
     } else {
       navigateToRoleHome(router, profile || { role });
     }
@@ -286,6 +316,15 @@ export default function RegisterScreen() {
                 keyboardType="email-address"
                 icon="mail-outline"
               />
+               <Input
+                label="رقم الهاتف"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="0XXXXXXXXX"
+                keyboardType="phone-pad"
+                icon="call-outline"
+              />
+
               <Input
                 label="كلمة المرور"
                 value={password}
@@ -294,6 +333,52 @@ export default function RegisterScreen() {
                 secureTextEntry
                 icon="lock-closed-outline"
               />
+
+              <Input
+                label="تأكيد كلمة المرور"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="أعد كتابة كلمة المرور"
+                secureTextEntry
+                icon="lock-closed-outline"
+              />
+
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>الولاية *</Text>
+              <TouchableOpacity
+                style={[
+                  styles.picker,
+                  {
+                    borderColor: theme.colors.border,
+                    backgroundColor: theme.colors.surfaceElevated,
+                  },
+                ]}
+                onPress={() => setWilayaModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="location-outline"
+                  size={18}
+                  color={theme.colors.textSecondary}
+                />
+                <Text
+                  style={{
+                    color: selectedWilaya
+                      ? theme.colors.text
+                      : theme.colors.textTertiary,
+                    flex: 1,
+                    textAlign: 'right'
+                  }}
+                >
+                  {selectedWilaya
+                    ? `${selectedWilaya.code} — ${selectedWilaya.name}`
+                    : "اختر الولاية"}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={18}
+                  color={theme.colors.textTertiary}
+                />
+              </TouchableOpacity>
 
               {error ? (
                 <View style={styles.errorContainer}>
@@ -310,7 +395,7 @@ export default function RegisterScreen() {
               />
             </Animated.View>
 
-            {/* Footer */}
+             {/* Footer */}
             <Animated.View style={[styles.footer, { opacity: formOpacity }]}>
               <Text
                 style={[
@@ -326,6 +411,57 @@ export default function RegisterScreen() {
                 </Text>
               </TouchableOpacity>
             </Animated.View>
+
+            <BottomSheet
+              visible={wilayaModal}
+              onClose={() => setWilayaModal(false)}
+              title="اختر الولاية"
+            >
+              <View style={{ gap: spacing.md, paddingBottom: 40 }}>
+                <Input
+                  value={wilayaSearch}
+                  onChangeText={setWilayaSearch}
+                  placeholder="بحث عن ولاية..."
+                  icon="search-outline"
+                />
+                <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
+                  {filteredWilayas.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[
+                        styles.wRow,
+                        { borderBottomColor: theme.colors.divider },
+                      ]}
+                      onPress={() => {
+                        setSelectedWilaya(item);
+                        setWilayaModal(false);
+                        setWilayaSearch("");
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: theme.colors.text,
+                          fontFamily: "Tajawal_700Bold",
+                          fontSize: 16,
+                          textAlign: 'right',
+                          flex: 1
+                        }}
+                      >
+                        {item.code} — {item.name}
+                      </Text>
+                      {selectedWilaya?.id === item.id && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color={theme.primary}
+                          style={{ marginRight: 10 }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </BottomSheet>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -431,4 +567,27 @@ const styles = StyleSheet.create({
   },
   footerText: { ...typography.body },
   link: { ...typography.bodyBold },
+  label: {
+    ...typography.caption,
+    marginBottom: 6,
+    marginTop: spacing.md,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: 'right'
+  },
+  picker: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    marginBottom: spacing.md
+  },
+  wRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 4,
+  },
 });

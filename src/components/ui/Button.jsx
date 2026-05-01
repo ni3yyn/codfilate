@@ -1,21 +1,26 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import {
-  TouchableOpacity,
   Text,
   ActivityIndicator,
   StyleSheet,
-  Animated,
   View,
   Platform,
+  Pressable
 } from 'react-native';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withSpring 
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../hooks/useTheme';
-import { typography, borderRadius as themeRadius, spacing } from '../../theme/theme';
+import { typography, borderRadius as themeRadius } from '../../theme/theme';
 
 /**
  * Premium Solid Button component.
- * Features: Haptic feedback, smooth scaling, Forest/Mint green theme.
+ * Upgraded to Reanimated for native 60fps scaling.
+ * Uses Pressable for explicit state control without the default opacity flicker.
  */
 export default function Button({
   title,
@@ -30,44 +35,38 @@ export default function Button({
   fullWidth = true,
 }) {
   const theme = useTheme();
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  
+  // High-performance shared value for scale
+  const scale = useSharedValue(1);
 
   const handlePressIn = () => {
+    if (disabled || loading) return;
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    Animated.spring(scaleAnim, {
-      toValue: 0.96,
-      friction: 8,
-      tension: 100,
-      useNativeDriver: true,
-    }).start();
+    // Snappy, fast scale down
+    scale.value = withSpring(0.96, { damping: 25, stiffness: 300, mass: 0.8 });
   };
 
   const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 6,
-      tension: 80,
-      useNativeDriver: true,
-    }).start();
+    if (disabled || loading) return;
+    // Snappy, fast scale up
+    scale.value = withSpring(1, { damping: 25, stiffness: 300, mass: 0.8 });
   };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const getBackgroundColor = () => {
     if (disabled) return theme.isDark ? '#334155' : '#E5E7EB';
     switch (variant) {
-      case 'primary':
-        return theme.primary;
-      case 'secondary':
-        return theme.primaryLight + '15';
-      case 'outline':
-        return 'transparent';
-      case 'danger':
-        return '#DC2626';
-      case 'ghost':
-        return 'transparent';
-      default:
-        return theme.primary;
+      case 'primary': return theme.primary;
+      case 'secondary': return theme.primaryLight + '15';
+      case 'outline': return 'transparent';
+      case 'danger': return '#DC2626';
+      case 'ghost': return 'transparent';
+      default: return theme.primary;
     }
   };
 
@@ -75,33 +74,26 @@ export default function Button({
     if (disabled) return theme.colors.textTertiary;
     switch (variant) {
       case 'primary':
-      case 'danger':
-        return '#FFFFFF';
+      case 'danger': return '#FFFFFF';
       case 'secondary':
       case 'outline':
-      case 'ghost':
-        return theme.primary;
-      default:
-        return '#FFFFFF';
+      case 'ghost': return theme.primary;
+      default: return '#FFFFFF';
     }
   };
 
   const getPadding = () => {
     switch (size) {
-      case 'sm':
-        return { paddingVertical: 8, paddingHorizontal: 16, height: 40 };
-      case 'md':
-        return { paddingVertical: 12, paddingHorizontal: 24, height: 52 };
-      case 'lg':
-        return { paddingVertical: 16, paddingHorizontal: 32, height: 64 };
-      default:
-        return { paddingVertical: 12, paddingHorizontal: 24, height: 52 };
+      case 'sm': return { paddingVertical: 8, paddingHorizontal: 16, height: 40 };
+      case 'md': return { paddingVertical: 12, paddingHorizontal: 24, height: 52 };
+      case 'lg': return { paddingVertical: 16, paddingHorizontal: 32, height: 64 };
+      default: return { paddingVertical: 12, paddingHorizontal: 24, height: 52 };
     }
   };
 
   return (
-    <Animated.View style={[{ transform: [{ scale: scaleAnim }] }, fullWidth && styles.fullWidth, style]}>
-      <TouchableOpacity
+    <Animated.View style={[animatedStyle, fullWidth && styles.fullWidth, style]}>
+      <Pressable
         onPress={() => {
            if (!disabled && !loading && onPress) {
              if (Platform.OS !== 'web') {
@@ -111,18 +103,18 @@ export default function Button({
            }
         }}
         disabled={disabled || loading}
-        activeOpacity={0.85}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={[
+        style={({ pressed }) => [
           styles.button,
           getPadding(),
           { backgroundColor: getBackgroundColor() },
           variant === 'outline' && {
-            borderWidth: 1.5,
+            borderWidth: 1, // Premium 1px instead of thick 1.5
             borderColor: disabled ? theme.colors.border : theme.primary,
           },
           fullWidth && styles.fullWidth,
+          pressed && !disabled && !loading && styles.pressedState
         ]}
       >
         <View style={styles.contentRow}>
@@ -145,7 +137,7 @@ export default function Button({
             </>
           )}
         </View>
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -172,4 +164,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pressedState: {
+    opacity: 0.85, // Replaces TouchableOpacity's built-in flicker with a controlled dimming
+  }
 });

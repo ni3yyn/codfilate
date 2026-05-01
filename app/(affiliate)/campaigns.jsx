@@ -1,8 +1,17 @@
 // campaigns.jsx - Pro Max UX (No default template, Scroll hints, Enhanced Visibility)
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, Share, ScrollView, LayoutAnimation, Modal, TextInput
+  View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, Share, ScrollView, LayoutAnimation, Modal, TextInput, useWindowDimensions
 } from "react-native";
+import Animated, { 
+  useSharedValue,
+  useAnimatedStyle, 
+  withTiming, 
+  withRepeat, 
+  Easing as ReanimatedEasing,
+  interpolate,
+  FadeInDown
+} from 'react-native-reanimated';
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -73,13 +82,36 @@ const TEMPLATES_DATA = [
   { id: 'lumber', name: 'Lumber', desc: 'أثاث وديكور', icon: 'bed', color: '#5C6B52', bg: '#F5F5F0', category: 'home', bestFor: 'الأثاث والديكور المنزلي' },
   { id: 'active', name: 'Active', desc: 'طاقة وعنفوان', icon: 'barbell', color: '#CCFF00', bg: '#121212', category: 'foodsport', bestFor: 'المعدات والملابس الرياضية' },
   { id: 'crave', name: 'Crave', desc: 'غذاء ومكملات', icon: 'restaurant', color: '#E65100', bg: '#FFF8F0', category: 'foodsport', bestFor: 'المكملات الغذائية والأكل' },
-  { id: 'artisan', name: "Artisan", desc: 'أصالة وحرفية', icon: 'diamond', color: '#a63400', bg: '#f9f6f3', category: 'general', bestFor: 'المنتجات التقليدية واليدوية' },
+  { id: 'artisan', name: "Artisan", desc: 'أصالة وحرفية', icon: 'diamond', color: '#a63400', bg: '#f9f6f3', category: 'general', bestFor: 'المنتجات تقليدية واليدوية' },
   { id: 'kicks', name: 'Kicks', desc: 'أحذية وحقائب', icon: 'footsteps', color: '#2D5CFF', bg: '#0F0F11', category: 'general', bestFor: 'الأحذية الرياضية الفاخرة' },
 ];
+
+const ModernShimmer = ({ visible = true, width = 200 }) => {
+  const shimmerValue = useSharedValue(-1);
+  useEffect(() => {
+    if (visible) {
+      shimmerValue.value = withRepeat(
+        withTiming(2, { duration: 1500, easing: ReanimatedEasing.bezier(0.4, 0, 0.2, 1) }),
+        -1, false
+      );
+    }
+  }, [visible]);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: interpolate(shimmerValue.value, [-1, 2], [-width * 0.5, width]) }]
+  }));
+  if (!visible) return null;
+  return (
+    <Animated.View style={[StyleSheet.absoluteFillObject, animatedStyle]}>
+      <LinearGradient colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ flex: 1, width: '50%' }} />
+    </Animated.View>
+  );
+};
 
 export default function AffiliateCampaignsScreen() {
   const theme = useTheme();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isDesktop = width > 768;
 
   const profile = useAuthStore((s) => s.profile);
   const currentStore = useStoreStore((s) => s.currentStore);
@@ -97,6 +129,7 @@ export default function AffiliateCampaignsScreen() {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [modalError, setModalError] = useState("");
   const [imageUris, setImageUris] = useState([]);
+  // Reanimated shared values are handled inside ModernShimmer or buttons for better recycling performance
 
   const [step, setStep] = useState(1);
   const [productId, setProductId] = useState("");
@@ -145,17 +178,23 @@ export default function AffiliateCampaignsScreen() {
   const activeCount = campaigns.filter(c => c.is_active).length;
   const totalOrders = orders?.length || 0;
   const totalProfit = campaigns.reduce((sum, c) => {
-    const campaignOrders = orders.filter(o => o.campaign_slug === c.slug && o.status === 'delivered');
-    const profitPerOrder = Number(c.sale_price) - Number(c.products?.price || 0);
-    return sum + (campaignOrders.length * profitPerOrder);
+    const campaignOrders = orders.filter(o => o.marketing_campaign_id === c.id && o.status === 'delivered');
+    const profitPerOrder = Number(c.products?.commission_amount || 0) - 200;
+    return sum + (campaignOrders.length * Math.max(0, profitPerOrder));
   }, 0);
 
   const publishedProducts = useMemo(() => (products || []).filter((p) => p.listing_status === "published" && p.is_active !== false), [products]);
 
   const selectedProduct = publishedProducts.find((p) => p.id === productId);
   const basePrice = selectedProduct ? Number(selectedProduct.price) : 0;
-  const salePriceNum = parseFloat(salePrice) || 0;
-  const commissionProfit = salePriceNum > basePrice ? salePriceNum - basePrice : 0;
+  const merchantCommission = selectedProduct ? Number(selectedProduct.commission_amount || 0) : 0;
+  
+  const salePriceNum = useMemo(() => {
+    // Product price IS the sale price — commission is cut from it
+    return basePrice;
+  }, [basePrice]);
+
+  const commissionProfit = merchantCommission - 200; // Affiliate net = commission - platform fee
 
   const load = useCallback(async () => {
     await fetchCampaignsForAffiliate();
@@ -177,7 +216,7 @@ export default function AffiliateCampaignsScreen() {
     setStep(1);
     setModalError("");
     setProductId(publishedProducts[0]?.id || "");
-    setSalePrice(publishedProducts[0] ? String(Number(publishedProducts[0].price)) : "");
+    setSalePrice(""); // Resetting but will be ignored or used as fallback
     setSlug("");
     setSelectedTemplateCat('all');
     setPageConfig({ template: '', headline: '', subheadline: '', btnText: '', f1Title: '', f1Desc: '', f2Title: '', f2Desc: '', f3Title: '', f3Desc: '', images: [] });
@@ -213,7 +252,6 @@ export default function AffiliateCampaignsScreen() {
     const s = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
     if (s.length < 3) { setModalError("المعرف يجب أن يكون 3 أحرف على الأقل."); return false; }
     if (!productId) { setModalError("يرجى اختيار منتج أولاً للترويج له."); return false; }
-    if (salePriceNum <= basePrice) { setModalError("سعر البيع يجب أن يكون أعلى من سعر المورد لتحقيق ربح."); return false; }
 
     setSlug(s);
     setStep(2);
@@ -249,8 +287,8 @@ export default function AffiliateCampaignsScreen() {
       const finalPageConfig = { ...getPageConfigData(), images: finalImageUrls };
 
       let res = editingCampaignId
-        ? await updateCampaign(editingCampaignId, { productId, salePrice, slug, page_config: finalPageConfig })
-        : await createCampaign({ affiliateId: affiliateProfile.id, productId, salePrice, slug, page_config: finalPageConfig });
+        ? await updateCampaign(editingCampaignId, { productId, slug, page_config: finalPageConfig })
+        : await createCampaign({ affiliateId: affiliateProfile?.id, productId, slug, page_config: finalPageConfig });
       
       setSaving(false);
 
@@ -269,7 +307,7 @@ export default function AffiliateCampaignsScreen() {
       }
     } catch (e) {
       setSaving(false);
-      setModalError("حدث خطأ أثناء رفع الصور أو حفظ البيانات.");
+      setModalError("حدث خطأ: " + (e.message || "أثناء رفع الصور أو حفظ البيانات."));
     }
   };
 
@@ -387,13 +425,90 @@ export default function AffiliateCampaignsScreen() {
           </View>
         }
         ListEmptyComponent={isLoading ? <LoadingSpinner /> : <EmptyState icon="rocket-outline" title="لا توجد صفحات هبوط بعد" message="قم بإنشاء أول صفحة هبوط لمنتج لتبدأ في جلب المبيعات." />}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const link = generateCampaignLink(item.slug);
           const pname = item.products?.name || "منتج";
-          const campaignOrders = orders.filter(o => o.campaign_slug === item.slug);
-          const campaignProfit = campaignOrders.filter(o => o.status === 'delivered').length * (Number(item.sale_price) - Number(item.products?.price || 0));
+          const campaignOrders = orders.filter(o => o.marketing_campaign_id === item.id);
+          const campaignProfit = campaignOrders.filter(o => o.status === 'delivered').length * Math.max(0, Number(item.products?.commission_amount || 0) - 200);
           const config = typeof item.page_config === 'string' ? JSON.parse(item.page_config) : (item.page_config || {});
           const tplObj = TEMPLATES_DATA.find(t => t.id === config.template) || { name: 'قالب كلاسيكي' };
+
+          if (isDesktop) {
+            return (
+              <Animated.View 
+                entering={FadeInDown.delay(index * 100).duration(400)}
+                style={[
+                  styles.desktopCampaignRow, 
+                  { 
+                    borderColor: item.is_active ? theme.primary + '40' : theme.colors.border,
+                    shadowOpacity: item.is_active ? 0.15 : 0.05,
+                  }
+                ]}
+              >
+                <LinearGradient
+                  colors={item.is_active ? [theme.colors.surface, theme.colors.surfaceElevated] : [theme.colors.surface, theme.colors.surface]}
+                  start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                
+                {/* Left: Product Info */}
+                <View style={styles.desktopProductSection}>
+                  <Text style={[styles.productName, { color: theme.colors.text, fontSize: 16 }]} numberOfLines={1}>{pname}</Text>
+                  <View style={styles.slugRow}>
+                    <Ionicons name="link" size={14} color={theme.colors.textTertiary} />
+                    <Text style={[styles.slugText, { color: theme.colors.textTertiary }]}>/c/{item.slug}</Text>
+                    <View style={[styles.templateBadge, { backgroundColor: theme.colors.surface2 }]}><Text style={[styles.templateBadgeText, { color: theme.colors.textSecondary, fontSize: 10 }]}>{tplObj.name}</Text></View>
+                  </View>
+                </View>
+
+                {/* Center: Performance Stats */}
+                <View style={styles.desktopStatsSection}>
+                  <View style={styles.statMini}>
+                    <Ionicons name="cart-outline" size={16} color={theme.colors.textSecondary} />
+                    <Text style={styles.statMiniText}>{campaignOrders.length} طلب</Text>
+                  </View>
+                  <View style={styles.statMini}>
+                    <Ionicons name="cash-outline" size={16} color="#00B894" />
+                    <Text style={[styles.statMiniText, { color: "#00B894" }]}>{formatCurrency(campaignProfit)}</Text>
+                  </View>
+                </View>
+
+                {/* Right-Center: Price & Profit (Compact) */}
+                <View style={styles.desktopPriceSection}>
+                  <View style={[styles.desktopPricePill, { backgroundColor: theme.colors.surface2 }]}>
+                    <ModernShimmer />
+                    <Text style={[styles.priceLabel, { marginBottom: 0, fontSize: 10 }]}>ربحك:</Text>
+                    <Text style={[styles.priceValue, { color: "#00B894", fontSize: 14 }]}>{formatCurrency(Math.max(0, Number(item.products?.commission_amount || 0) - 200))}</Text>
+                  </View>
+                </View>
+
+                {/* Right: Actions */}
+                <View style={styles.desktopActionsSection}>
+                  <TouchableOpacity style={styles.desktopShareBtn} activeOpacity={0.85} onPress={() => Share.share({ message: `تفضل بزيارة الرابط للطلب:\n${link}`, url: link })}>
+                    <LinearGradient 
+                      colors={item.is_active ? ["#00B894", "#00CEA9"] : ["#9CA3AF", "#D1D5DB"]} 
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} 
+                      style={styles.desktopShareGradient}
+                    >
+                      <Ionicons name="share-social-outline" size={18} color="#FFF" />
+                    </LinearGradient>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity onPress={() => toggleActive(item.id, item.is_active)} style={[styles.iconBtn, { backgroundColor: item.is_active ? theme.error + '15' : theme.primary + '15' }]}>
+                    <Ionicons name={item.is_active ? "pause" : "play"} size={18} color={item.is_active ? theme.error : theme.primary} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity onPress={() => openEdit(item)} style={styles.iconBtn}>
+                    <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity onPress={() => confirmDelete(item.id)} style={styles.iconBtn}>
+                    <Ionicons name="trash-outline" size={18} color={theme.error} />
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            );
+          }
 
           return (
             <Card style={styles.campaignCard} accentColor={item.is_active ? theme.primary : theme.colors.textTertiary} accentPosition="left">
@@ -417,9 +532,13 @@ export default function AffiliateCampaignsScreen() {
                 <View style={[styles.priceMatrix, { backgroundColor: theme.colors.surface2 }]}>
                   <View style={styles.priceItem}><Text style={styles.priceLabel}>المتجر</Text><Text style={styles.priceValue}>{formatCurrency(item.products?.price || 0)}</Text></View>
                   <View style={styles.priceDivider} />
-                  <View style={styles.priceItem}><Text style={styles.priceLabel}>البيع</Text><Text style={[styles.priceValue, { color: theme.primary }]}>{formatCurrency(item.sale_price)}</Text></View>
+                  <View style={styles.priceItem}><Text style={styles.priceLabel}>البيع</Text><Text style={[styles.priceValue, { color: theme.primary }]}>{formatCurrency(item.products?.price || 0)}</Text></View>
                   <View style={styles.priceDivider} />
-                  <View style={styles.priceItem}><Text style={styles.priceLabel}>الربح/قطعة</Text><Text style={[styles.priceValue, { color: "#00B894" }]}>{formatCurrency(Number(item.sale_price) - Number(item.products?.price || 0))}</Text></View>
+                  <View style={[styles.priceItem, { overflow: 'hidden' }]}>
+                    <ModernShimmer />
+                    <Text style={styles.priceLabel}>صافي ربحك</Text>
+                    <Text style={[styles.priceValue, { color: "#00B894" }]}>{formatCurrency(Math.max(0, Number(item.products?.commission_amount || 0) - 200))}</Text>
+                  </View>
                 </View>
 
                 <View style={styles.cardStats}>
@@ -433,7 +552,8 @@ export default function AffiliateCampaignsScreen() {
                     <Text style={[styles.actionBtnText, { color: item.is_active ? theme.error : theme.primary }]}>{item.is_active ? "توقيف" : "تفعيل"}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={{ flex: 1.5 }} activeOpacity={0.85} onPress={() => Share.share({ message: `تفضل بزيارة الرابط للطلب:\n${link}`, url: link })}>
-                    <LinearGradient colors={item.is_active ? ["#00B894", "#00CEA9"] : ["#9CA3AF", "#D1D5DB"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.shareGradient}>
+                    <LinearGradient colors={item.is_active ? ["#00B894", "#00CEA9"] : ["#9CA3AF", "#D1D5DB"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.shareGradient, { overflow: 'hidden' }]}>
+                      {item.is_active && <ModernShimmer width={300} />}
                       <Ionicons name="share-social-outline" size={20} color="#FFF" />
                       <Text style={styles.shareBtnText}>مشاركة الصفحة</Text>
                     </LinearGradient>
@@ -479,17 +599,23 @@ export default function AffiliateCampaignsScreen() {
                 )}
 
                 <View style={{ gap: spacing.sm, opacity: (publishedProducts.length === 0 && !editingCampaignId) ? 0.5 : 1 }} pointerEvents={(publishedProducts.length === 0 && !editingCampaignId) ? 'none' : 'auto'}>
-                  <Input label="سعر البيع المقترح لزبائنك (DZD)" value={salePrice} onChangeText={(t) => { setSalePrice(t); setModalError(""); }} keyboardType="decimal-pad" placeholder="مثال: 4500" icon="pricetag-outline" />
-                  {selectedProduct && salePriceNum > 0 && (
-                    <View style={[styles.profitCalc, { backgroundColor: commissionProfit > 0 ? "#00B89408" : "#FF6B6B08", borderColor: commissionProfit > 0 ? "#00B89420" : "#FF6B6B20" }]}>
-                      <View style={[styles.profitBadge, { backgroundColor: commissionProfit > 0 ? "#00B894" : "#FF6B6B" }]}><Ionicons name={commissionProfit > 0 ? "trending-up" : "alert-circle"} size={20} color="#FFF" /></View>
-                      <View style={{ flex: 1, marginStart: 12 }}>
-                        <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontFamily: "Tajawal_500Medium" }}>{commissionProfit > 0 ? "صافي عمولتك لكل طلب" : "السعر يجب أن يغطي سعر المورد"}</Text>
-                        <Text style={{ color: commissionProfit > 0 ? "#00B894" : "#FF6B6B", fontFamily: "Tajawal_800ExtraBold", fontSize: 26 }}>{commissionProfit > 0 ? formatCurrency(commissionProfit) : "---"}</Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}><Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>سعر المورد</Text><Text style={{ fontSize: 16, fontFamily: 'Tajawal_700Bold', color: theme.colors.textSecondary }}>{formatCurrency(basePrice)}</Text></View>
+                  <View style={[styles.profitCalc, { backgroundColor: commissionProfit > 0 ? "#00B89408" : "#FF6B6B08", borderColor: commissionProfit > 0 ? "#00B89420" : "#FF6B6B20", marginTop: 12 }]}>
+                    <View style={[styles.profitBadge, { backgroundColor: commissionProfit > 0 ? "#00B894" : "#FF6B6B" }]}><Ionicons name={commissionProfit > 0 ? "trending-up" : "alert-circle"} size={20} color="#FFF" /></View>
+                    <View style={{ flex: 1, marginStart: 12 }}>
+                      <Text style={{ color: theme.colors.textTertiary, fontSize: 13, fontFamily: "Tajawal_500Medium" }}>{commissionProfit > 0 ? "صافي عمولتك لكل طلب" : "المنتج لا يوفر عمولة حالياً"}</Text>
+                      <Text style={{ color: commissionProfit > 0 ? "#00B894" : "#FF6B6B", fontFamily: "Tajawal_800ExtraBold", fontSize: 26 }}>{commissionProfit > 0 ? formatCurrency(commissionProfit) : "---"}</Text>
                     </View>
-                  )}
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>سعر البيع للزبون</Text>
+                      <Text style={{ fontSize: 16, fontFamily: 'Tajawal_700Bold', color: theme.primary }}>{formatCurrency(salePriceNum)}</Text>
+                    </View>
+                  </View>
+                  <View style={[styles.tipBox, { backgroundColor: theme.primary + '05', marginBottom: 12 }]}>
+                    <Ionicons name="information-circle-outline" size={18} color={theme.primary} />
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontFamily: 'Tajawal_500Medium', flex: 1 }}>
+                      ملاحظة: السعر والعمولة يتم تحديدهما من قبل صاحب المتجر لضمان تنافسية المنتج.
+                    </Text>
+                  </View>
                   <Input label="معرف الرابط المخصص" value={slug} onChangeText={(t) => { setSlug(t.toLowerCase()); setModalError(""); }} placeholder="مثال: offer-summer" icon="at-outline" />
                 </View>
               </View>
@@ -747,17 +873,17 @@ const styles = StyleSheet.create({
   productName: { ...typography.h3, fontSize: 18, marginBottom: 6 },
   slugRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   slugText: { fontSize: 12, fontFamily: 'Tajawal_500Medium' },
-  templateBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  templateBadgeText: { fontSize: 10, fontFamily: 'Tajawal_700Bold' },
+  templateBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  templateBadgeText: { fontSize: 11, fontFamily: 'Tajawal_700Bold' },
   iconBtn: { padding: 6, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 8 },
   priceMatrix: { flexDirection: 'row', padding: 12, borderRadius: 12, marginBottom: 16 },
   priceItem: { flex: 1, alignItems: 'center' },
   priceDivider: { width: 1, height: '100%', backgroundColor: 'rgba(0,0,0,0.05)' },
-  priceLabel: { fontSize: 11, fontFamily: 'Tajawal_500Medium', color: '#94A3B8', marginBottom: 4 },
-  priceValue: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
-  cardStats: { flexDirection: 'row', gap: 16, marginBottom: 16, paddingHorizontal: 4 },
+  priceLabel: { fontSize: 12, fontFamily: 'Tajawal_500Medium', color: '#94A3B8', marginBottom: 4 },
+  priceValue: { fontSize: 16, fontFamily: 'Tajawal_700Bold' },
+  cardStats: { flexDirection: 'row', gap: 20, marginBottom: 16, paddingHorizontal: 4 },
   statMini: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  statMiniText: { fontSize: 13, fontFamily: 'Tajawal_700Bold', color: '#64748B' },
+  statMiniText: { fontSize: 14, fontFamily: 'Tajawal_700Bold', color: '#64748B' },
   cardActions: { flexDirection: 'row', gap: spacing.sm },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 12, height: 48 },
   actionBtnText: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
@@ -817,5 +943,63 @@ const styles = StyleSheet.create({
     fontSize: 14,
     flex: 1,
     textAlign: 'right'
-  }
+  },
+
+  // ──── Desktop Antigravity Styles ────
+  desktopCampaignRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+    gap: 20,
+    // Spatial Depth Shadow
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 15,
+    elevation: 4,
+  },
+  desktopProductSection: {
+    flex: 2,
+    justifyContent: 'center',
+  },
+  desktopStatsSection: {
+    flex: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+  },
+  desktopPriceSection: {
+    flex: 1.5,
+    alignItems: 'flex-start',
+  },
+  desktopPricePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 8,
+    overflow: 'hidden',
+  },
+  desktopActionsSection: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  desktopShareBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  desktopShareGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

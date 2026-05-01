@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,11 +20,10 @@ import { useAffiliateStore } from '../../src/stores/useAffiliateStore';
 import { useOrderStore } from '../../src/stores/useOrderStore';
 import { useCampaignStore } from '../../src/stores/useCampaignStore';
 import StatCard from '../../src/components/ui/StatCard';
-import Avatar from '../../src/components/ui/Avatar';
 import Card from '../../src/components/ui/Card';
 import LoadingSpinner from '../../src/components/ui/LoadingSpinner';
 import UniversalHeader from '../../src/components/ui/UniversalHeader';
-import { typography, spacing, borderRadius } from '../../src/theme/theme';
+import { typography, spacing, borderRadius as themeRadius } from '../../src/theme/theme';
 import { formatCurrency, formatCompactNumber } from '../../src/lib/utils';
 import { LineChart } from 'react-native-gifted-charts';
 
@@ -44,11 +44,11 @@ export default function AffiliateDashboard() {
   const { campaigns, fetchCampaignsForAffiliate } = useCampaignStore();
   const [refreshing, setRefreshing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
   // Computed stats
   const pendingCommissions = commissions.filter(c => c.status === 'pending').reduce((s, c) => s + Number(c.amount || 0), 0);
-  const paidCommissions = stats.total_paid || 0;
-  const approvedCommissions = commissions.filter(c => c.status === 'approved').reduce((s, c) => s + Number(c.amount || 0), 0);
+  const approvedCommissions = stats.available_balance || 0;
   const activeCampaigns = (campaigns || []).filter(c => c.is_active).length;
   const totalOrdersGenerated = orders?.length || 0;
   const deliveredOrders = (orders || []).filter(o => o.status === 'delivered').length;
@@ -56,16 +56,18 @@ export default function AffiliateDashboard() {
   const thisMonthEarnings = commissions.filter(c => c.created_at?.startsWith(thisMonth)).reduce((s, c) => s + Number(c.amount || 0), 0);
 
   const loadData = useCallback(async () => {
-    const targetStoreId = profile?.store_id;
-    await fetchAffiliateProfile(targetStoreId);
-    
-    // Fetch all aggregate stats and global data
-    await Promise.all([
-      fetchAffiliateStats(),
-      fetchCommissions(),
-      fetchAffiliateOrders(),
-      fetchCampaignsForAffiliate(),
-    ]);
+    try {
+      const targetStoreId = profile?.store_id;
+      await fetchAffiliateProfile(targetStoreId);
+      await fetchAffiliateStats();
+      await fetchCommissions();
+      await fetchAffiliateOrders();
+      await fetchCampaignsForAffiliate();
+    } catch (e) {
+      if (__DEV__) console.warn('[Dashboard] loadData error:', e);
+    } finally {
+      setInitialLoaded(true);
+    }
   }, [profile, fetchAffiliateProfile, fetchAffiliateStats, fetchCommissions, fetchAffiliateOrders, fetchCampaignsForAffiliate]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -81,7 +83,7 @@ export default function AffiliateDashboard() {
     }
   };
 
-  if (isLoading && !affiliateProfile) return <LoadingSpinner message="جارٍ تجهيز بياناتك..." />;
+  if (!initialLoaded && !affiliateProfile) return <LoadingSpinner message="جارٍ تجهيز بياناتك..." />;
 
   const getChartData = () => {
     const last7Days = [...Array(7)].map((_, i) => {
@@ -94,7 +96,7 @@ export default function AffiliateDashboard() {
         const cDate = new Date(c.created_at);
         return `${cDate.getFullYear()}-${String(cDate.getMonth() + 1).padStart(2, '0')}-${String(cDate.getDate()).padStart(2, '0')}` === dateStr;
       }).reduce((sum, c) => sum + Number(c.amount || 0), 0);
-      return { value: dayTotal, label: dateStr.split('-')[2], dataPointText: dayTotal > 0 ? String(dayTotal) : '' };
+      return { value: dayTotal, label: dateStr.split('-')[2] };
     });
   };
 
@@ -103,99 +105,124 @@ export default function AffiliateDashboard() {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <UniversalHeader 
-        title="لوحة التحكم" 
-        subtitle={`مرحباً بك، ${profile?.full_name || 'مسوق'}`}
-      />
+      <UniversalHeader title="لوحة التحكم" subtitle={`مرحباً بك، ${profile?.full_name || 'مسوق'}`} />
+      
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
-          isWide && {
-            maxWidth: maxContentWidth,
-            alignSelf: 'center',
-            width: '100%',
-            paddingHorizontal: contentPadding,
-            paddingBottom: listContentBottomPad,
-          },
+          isWide && { maxWidth: maxContentWidth, alignSelf: 'center', width: '100%', paddingHorizontal: contentPadding, paddingBottom: listContentBottomPad },
         ]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Referral Code */}
-        {affiliateProfile && (
-          <Card style={styles.codeCard} accentColor={theme.primary} accentPosition="left">
-            <View style={styles.codeCardInner}>
-              <View style={styles.codeLeft}>
-                <Text style={[styles.codeLabel, { color: theme.colors.textSecondary }]}>رمز الإحالة الخاص بك</Text>
-                <Text style={[styles.codeValue, { color: theme.colors.text }]}>{affiliateProfile.referral_code}</Text>
+        <Animated.View style={styles.heroSection}>
+          <Card style={[styles.heroCard, { backgroundColor: theme.primary }]}>
+            <View style={styles.heroContent}>
+              <View style={styles.heroText}>
+                <Text style={styles.heroLabel}>الرصيد المتاح للسحب</Text>
+                <Text style={styles.heroValue}>{formatCurrency(stats.available_balance || 0)}</Text>
               </View>
-              <TouchableOpacity onPress={handleCopyCode} style={[styles.copyBtn, { backgroundColor: theme.primary + '15' }]} activeOpacity={0.7}>
-                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={20} color={theme.primary} />
-                <Text style={[styles.copyText, { color: theme.primary }]}>{copied ? 'تم النسخ' : 'نسخ الرمز'}</Text>
-              </TouchableOpacity>
+              <View style={styles.heroIconBox}>
+                <Ionicons name="wallet" size={32} color="rgba(255,255,255,0.3)" />
+              </View>
             </View>
           </Card>
-        )}
+        </Animated.View>
 
-        {/* Pro Tip */}
-        <View style={{ backgroundColor: theme.primary + '10', padding: spacing.md, borderRadius: borderRadius.lg, marginBottom: spacing.md }}>
-           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-             <Ionicons name="rocket" size={20} color={theme.primary} style={{ marginEnd: 8 }} />
-             <Text style={{ fontFamily: 'Tajawal_700Bold', color: theme.primary }}>نصيحة للمسوقين 🚀</Text>
-           </View>
-           <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
-             ركز على التسويق الذكي! لا تبالغ في زيادة سعر البيع لتجنب المرتجعات. تأكد دائماً من أن رقم هاتف الزبون صحيح قبل تأكيد الطلبية لضمان سرعة التوصيل.
-           </Text>
+        {/* Primary Stats Grid */}
+        <View style={styles.gridContainer}>
+          <StatCard title="إجمالي الأرباح" value={formatCurrency(stats.earnings)} icon="trending-up" color="#6C5CE7" animate />
+          <StatCard title="عمولات معلقة" value={formatCurrency(pendingCommissions)} icon="time" color="#FDCB6E" animate />
+          <StatCard title="النقرات" value={formatCompactNumber(stats.clicks)} icon="finger-print" color="#0984E3" animate />
+          <StatCard title="التحويل" value={`${stats.conversionRate}%`} icon="trending-up" color="#00B894" animate />
         </View>
 
-        <View style={{ backgroundColor: '#FF6B6B10', padding: spacing.md, borderRadius: borderRadius.lg, marginBottom: spacing.md }}>
-           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-             <Ionicons name="shield-checkmark" size={20} color="#FF6B6B" style={{ marginEnd: 8 }} />
-             <Text style={{ fontFamily: 'Tajawal_700Bold', color: '#FF6B6B' }}>تنبيه هام ⚠️</Text>
-           </View>
-           <Text style={{ fontFamily: 'Tajawal_500Medium', color: theme.colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
-             أرباحك يتم صرفها من طرف المدير الإقليمي لولاية التاجر فور استلام الزبون للطلبية. تأكد من إدخال معلومات CCP/بريدي موب بشكل صحيح في حسابك.
-           </Text>
+        {/* Logistics Ribbon */}
+        <View style={styles.ribbonContainer}>
+          <View style={styles.ribbon}>
+             <View style={styles.ribbonItem}>
+               <Text style={styles.ribbonLabel}>مدفوعة</Text>
+               <Text style={[styles.ribbonVal, { color: '#2D6A4F' }]}>{formatCurrency(stats.total_paid)}</Text>
+             </View>
+             <View style={styles.ribbonDivider} />
+             <View style={styles.ribbonItem}>
+               <Text style={styles.ribbonLabel}>الطلبات</Text>
+               <Text style={[styles.ribbonVal, { color: theme.primary }]}>{totalOrdersGenerated}</Text>
+             </View>
+             <View style={styles.ribbonDivider} />
+             <View style={styles.ribbonItem}>
+               <Text style={styles.ribbonLabel}>حملات</Text>
+               <Text style={[styles.ribbonVal, { color: '#E17055' }]}>{activeCampaigns}</Text>
+             </View>
+          </View>
         </View>
 
-        {/* Main Stats */}
-        <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>نظرة إحصائية</Text>
-        <View style={styles.statsRow}>
-          <StatCard title="إجمالي الأرباح" value={formatCurrency(stats.earnings)} icon="wallet" color={theme.primary} subtitle="رصيد متوفر" />
-          <StatCard title="أرباح الشهر" value={formatCurrency(thisMonthEarnings)} icon="calendar" color="#6C5CE7" subtitle={thisMonth} />
-          <StatCard title="عمولات معلقة" value={formatCurrency(pendingCommissions)} icon="time" color="#FDCB6E" subtitle="بانتظار التسوية" />
-          <StatCard title="عمولات مدفوعة" value={formatCurrency(stats.total_paid)} icon="checkmark-circle" color="#00B894" />
-          <StatCard title="الطلبات المولدة" value={String(totalOrdersGenerated)} icon="receipt" color="#0984E3" subtitle={`${deliveredOrders} تم توصيلها`} />
-          <StatCard title="حملات نشطة" value={String(activeCampaigns)} icon="megaphone" color="#E17055" subtitle={`من ${(campaigns || []).length} إجمالي`} />
-          <StatCard title="النقرات" value={formatCompactNumber(stats.clicks)} icon="finger-print" color="#6C5CE7" subtitle="زيارات الروابط" />
-          <StatCard title="معدل التحويل" value={`${stats.conversionRate}%`} icon="trending-up" color="#FDCB6E" subtitle="أداء الروابط" />
-        </View>
-
-        {/* Chart */}
+        {/* Referral Bento */}
         {affiliateProfile && (
-          <>
-            <Text style={[styles.sectionTitle, { color: theme.colors.text, marginTop: spacing.lg }]}>💰 أداء الأرباح (آخر ٧ أيام)</Text>
-            <Card style={styles.chartCard}>
-              <LineChart data={chartData} height={160} width={300} initialSpacing={20} spacing={45} color={theme.primary} thickness={3} startFillColor={theme.primary} endFillColor={theme.primary + '05'} startOpacity={0.2} endOpacity={0.02} rulesColor="rgba(0,0,0,0.03)" yAxisColor="transparent" xAxisColor="transparent" yAxisTextStyle={{ color: theme.colors.textTertiary, fontSize: 10 }} xAxisLabelTextStyle={{ color: theme.colors.textTertiary, fontSize: 10 }} hideDataPoints={false} dataPointsColor={theme.primary} dataPointsRadius={4} curved isAnimated noOfSections={4} maxValue={maxVal + (maxVal * 0.2)} areaChart />
-            </Card>
-          </>
+           <TouchableOpacity style={styles.referralBento} onPress={handleCopyCode} activeOpacity={0.9}>
+              <View style={styles.bentoLeft}>
+                 <Text style={[styles.bentoLabel, { color: theme.colors.textSecondary }]}>رمز الإحالة الخاص بك</Text>
+                 <Text style={[styles.bentoValue, { color: theme.colors.text }]}>{affiliateProfile.referral_code}</Text>
+              </View>
+              <View style={[styles.bentoAction, { backgroundColor: theme.primary + (copied ? '20' : '10') }]}>
+                 <Ionicons name={copied ? 'checkmark' : 'copy'} size={20} color={theme.primary} />
+                 <Text style={[styles.bentoActionText, { color: theme.primary }]}>{copied ? 'تم' : 'نسخ'}</Text>
+              </View>
+           </TouchableOpacity>
         )}
 
-        {!affiliateProfile && (
-          <Card style={styles.noStoreCard} accentColor={theme.primary} accentPosition="left">
-            <View style={[styles.noStoreIcon, { backgroundColor: theme.primary + '15' }]}>
-              <Ionicons name="rocket-outline" size={40} color={theme.primary} />
-            </View>
-            <Text style={[styles.noStoreTitle, { color: theme.colors.text }]}>ابدأ رحلة الأرباح</Text>
-            <Text style={[styles.noStoreDesc, { color: theme.colors.textSecondary }]}>تصفح المنتجات المتوفرة في السوق وابدأ في إنشاء روابط التسويق الخاصة بك.</Text>
-            <TouchableOpacity 
-              onPress={() => router.push('/(affiliate)/store')}
-              style={{ backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, marginTop: spacing.lg }}
-            >
-              <Text style={{ color: '#FFF', fontFamily: 'Tajawal_700Bold' }}>تصفح المنتجات</Text>
-            </TouchableOpacity>
-          </Card>
-        )}
+        {/* Pro Tips & Alerts */}
+        <View style={styles.tipsContainer}>
+           <View style={[styles.tipCard, { backgroundColor: theme.primary + '08' }]}>
+              <View style={styles.tipHeader}>
+                 <Ionicons name="bulb" size={18} color={theme.primary} />
+                 <Text style={[styles.tipTitle, { color: theme.primary }]}>نصيحة للمسوقين 🚀</Text>
+              </View>
+              <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>
+                ركز على التسويق الذكي! لا تبالغ في زيادة سعر البيع لتجنب المرتجعات.
+              </Text>
+           </View>
+           
+           <View style={[styles.tipCard, { backgroundColor: '#FF6B6B08' }]}>
+              <View style={styles.tipHeader}>
+                 <Ionicons name="alert-circle" size={18} color="#FF6B6B" />
+                 <Text style={[styles.tipTitle, { color: '#FF6B6B' }]}>تنبيه هام ⚠️</Text>
+              </View>
+              <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>
+                أرباحك يتم صرفها من طرف المدير الإقليمي فور استلام الزبون للطلبية.
+              </Text>
+           </View>
+        </View>
+
+        {/* Chart Section */}
+        <View style={styles.sectionHeader}>
+           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>أداء العمولات الأسبوعي</Text>
+        </View>
+        <Card style={styles.chartCard}>
+           <LineChart 
+             data={chartData} 
+             height={180} 
+             width={isWide ? 800 : 320} 
+             initialSpacing={10} 
+             spacing={isWide ? 100 : 45} 
+             color={theme.primary} 
+             thickness={5} 
+             startFillColor={theme.primary} 
+             endFillColor="transparent" 
+             startOpacity={0.1} 
+             endOpacity={0} 
+             curved 
+             isAnimated 
+             noOfSections={4} 
+             maxValue={maxVal + (maxVal * 0.2)} 
+             areaChart 
+             yAxisTextStyle={{ color: theme.colors.textTertiary, fontSize: 10 }} 
+             xAxisLabelTextStyle={{ color: theme.colors.textTertiary, fontSize: 10 }}
+             dataPointsColor={theme.primary}
+             dataPointsRadius={4}
+             focusEnabled
+           />
+        </Card>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -205,20 +232,36 @@ export default function AffiliateDashboard() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { padding: spacing.md, paddingTop: spacing.xs, paddingBottom: 220 },
-  codeCard: { marginBottom: spacing.lg },
-  codeCardInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  codeLeft: {},
-  codeLabel: { ...typography.caption, marginBottom: 4 },
-  codeValue: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 24, letterSpacing: 2 },
-  copyBtn: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, gap: 4 },
-  copyText: { fontSize: 10, fontFamily: 'Tajawal_700Bold' },
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  sectionTitle: { ...typography.h3, marginBottom: spacing.md },
-  chartCard: { paddingVertical: spacing.lg, alignItems: 'center', overflow: 'hidden' },
-  noStoreCard: { marginTop: spacing.lg, alignItems: 'center', paddingVertical: spacing.xxl, borderStyle: 'dashed', borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-  noStoreIcon: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md },
-  noStoreTitle: { ...typography.h1, fontSize: 20, marginBottom: spacing.sm, textAlign: 'center' },
-  noStoreDesc: { ...typography.body, textAlign: 'center', paddingHorizontal: spacing.xl },
+  scroll: { padding: spacing.md, paddingTop: spacing.sm },
+  heroSection: { marginBottom: 12 },
+  heroCard: { padding: 22, borderRadius: 24, borderVariant: 'none', shadowOpacity: 0.12 },
+  heroContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroText: { flex: 1 },
+  heroLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontFamily: 'Tajawal_500Medium' },
+  heroValue: { color: '#FFFFFF', fontSize: 30, fontFamily: 'Tajawal_800ExtraBold', marginTop: 4 },
+  heroTrend: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  heroTrendText: { color: 'rgba(255,255,255,0.95)', fontSize: 12, fontFamily: 'Tajawal_700Bold' },
+  heroIconBox: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  ribbonContainer: { marginBottom: 15 },
+  ribbon: { flexDirection: 'row', backgroundColor: '#FFFFFF', padding: 14, borderRadius: 18, alignItems: 'center', shadowOpacity: 0.04, borderWidth: 1, borderColor: '#F1F5F9' },
+  ribbonItem: { flex: 1, alignItems: 'center', gap: 2 },
+  ribbonDivider: { width: 1, height: 28, backgroundColor: '#F1F5F9' },
+  ribbonVal: { fontSize: 16, fontFamily: 'Tajawal_800ExtraBold' },
+  ribbonLabel: { fontSize: 10, color: '#64748B', fontFamily: 'Tajawal_700Bold', marginBottom: 2 },
+  referralBento: { flexDirection: 'row', backgroundColor: '#FFFFFF', padding: 16, borderRadius: 20, alignItems: 'center', justifyContent: 'space-between', marginBottom: 15, shadowOpacity: 0.03, borderWidth: 1, borderColor: '#F1F5F9' },
+  bentoLeft: { flex: 1 },
+  bentoLabel: { fontSize: 12, fontFamily: 'Tajawal_500Medium', marginBottom: 4 },
+  bentoValue: { fontSize: 24, fontFamily: 'Tajawal_800ExtraBold', letterSpacing: 1 },
+  bentoAction: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
+  bentoActionText: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
+  tipsContainer: { gap: 10, marginBottom: 15 },
+  tipCard: { padding: 14, borderRadius: 18 },
+  tipHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  tipTitle: { fontSize: 14, fontFamily: 'Tajawal_700Bold' },
+  tipText: { fontSize: 12, fontFamily: 'Tajawal_500Medium', lineHeight: 18 },
+  sectionTitle: { ...typography.bodyBold, fontSize: 18, marginBottom: 0 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 12 },
+  chartCard: { paddingVertical: spacing.lg, paddingHorizontal: spacing.sm, alignItems: 'center', borderRadius: 24, borderVariant: 'none', shadowOpacity: 0.04 },
   bottomSpacer: { height: 100 },
 });

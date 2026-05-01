@@ -36,7 +36,7 @@ export default function SubmitOrderScreen() {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web' && width > 768;
 
-  const { productId, productName, productPrice, commissionRate, campaignId, salePrice: salePriceParam, storeId } = useLocalSearchParams();
+  const { productId, productName, productPrice, merchantCommission, campaignId, salePrice: salePriceParam, storeId } = useLocalSearchParams();
   
   const { createOrder } = useOrderStore();
   const currentStore = useStoreStore((s) => s.currentStore);
@@ -59,7 +59,6 @@ export default function SubmitOrderScreen() {
   const [wilayaPickerVisible, setWilayaPickerVisible] = useState(false);
   const [wilayaSearch, setWilayaSearch] = useState('');
   const [loading, setLoading] = useState(false);
-  const [customSalePrice, setCustomSalePrice] = useState('');
   
   // Custom Alert state
   const [alertConfig, setAlertConfig] = useState({ visible: false, title: '', message: '', type: 'error' });
@@ -72,13 +71,7 @@ export default function SubmitOrderScreen() {
   const parsedBasePrice = parseFloat(productPrice) || 0;
   const parsedSaleOverride = salePriceParam != null && salePriceParam !== '' ? parseFloat(salePriceParam) : null;
 
-  useEffect(() => {
-    if (parsedSaleOverride) {
-      setCustomSalePrice(parsedSaleOverride.toString());
-    } else {
-      setCustomSalePrice(parsedBasePrice.toString());
-    }
-  }, [parsedSaleOverride, parsedBasePrice]);
+  // Price override logic removed as affiliates no longer set the price
 
   useEffect(() => {
     async function loadAffiliate() {
@@ -125,17 +118,17 @@ export default function SubmitOrderScreen() {
     }
   }, [affiliateProfile?.id, loadedCampaign]);
 
+  const parsedMerchantCommission = parseFloat(merchantCommission) || 0;
   const deliveryFee = selectedWilaya ? getDeliveryFee(selectedWilaya.id, deliveryType) : 0;
-  const salePrice = useMemo(() => {
-    if (customSalePrice !== '') return parseFloat(customSalePrice) || 0;
-    if (loadedCampaign?.sale_price != null) return Number(loadedCampaign.sale_price);
-    if (parsedSaleOverride != null && !Number.isNaN(parsedSaleOverride)) return parsedSaleOverride;
-    return parsedBasePrice;
-  }, [customSalePrice, loadedCampaign, parsedSaleOverride, parsedBasePrice]);
+  // Product price IS the sale price (what the customer pays).
+  // Commission is CUT from the price, not added on top.
+  const salePrice = parsedBasePrice;
   const totalForCustomer = salePrice + deliveryFee;
-
-  const profit = salePrice - parsedBasePrice;
-  const profitPercentage = parsedBasePrice > 0 ? (profit / parsedBasePrice) * 100 : 0;
+  
+  // Merchant net share = product price − commission
+  const merchantNet = parsedBasePrice - parsedMerchantCommission;
+  // Affiliate net profit = Commission set by merchant − Platform Fee (200 DZD)
+  const profit = parsedMerchantCommission - 200;
 
   const filteredWilayas = useMemo(() => wilayas.filter(w => {
     if (!wilayaSearch) return true;
@@ -178,7 +171,7 @@ export default function SubmitOrderScreen() {
       customer_address: form.address,
       notes: form.notes,
       total: totalForCustomer,
-      base_price: parsedBasePrice,
+      base_price: merchantNet,
       sale_price: salePrice,
       delivery_fee: deliveryFee,
       delivery_type: deliveryType,
@@ -249,50 +242,24 @@ export default function SubmitOrderScreen() {
 
               <View style={styles.priceDetails}>
                  <View style={styles.detailRow}>
-                    <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>سعر الجملة (الأساسي)</Text>
-                    <Text style={[styles.detailValue, { color: theme.colors.text }]}>{formatCurrency(parsedBasePrice)}</Text>
+                    <Text style={[styles.detailLabel, { color: theme.colors.textSecondary }]}>سعر المنتج</Text>
+                    <Text style={[styles.detailValue, { color: theme.colors.text }]}>{formatCurrency(salePrice)}</Text>
                  </View>
 
                  {profile?.role === 'affiliate' && (
                    <View style={[styles.affiliatePriceBox, { backgroundColor: theme.primary + '05', borderColor: theme.primary + '20' }]}>
-                      <View style={styles.inputRow}>
-                        <Text style={[styles.detailLabel, { color: theme.primary, fontFamily: 'Tajawal_700Bold' }]}>سعر البيع للزبون (DZD):</Text>
-                        <View style={[styles.priceInputWrapper, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
-                          <TextInput
-                            style={[styles.priceInput, { color: theme.colors.text }]}
-                            value={customSalePrice}
-                            onChangeText={setCustomSalePrice}
-                            keyboardType="numeric"
-                            placeholder="0.00"
-                            placeholderTextColor={theme.colors.textTertiary}
-                          />
-                          <Ionicons name="pencil" size={14} color={theme.colors.textTertiary} style={{ marginEnd: 8 }} />
-                        </View>
-                      </View>
-                      
-                      <View style={[styles.detailRow, { marginTop: 12 }]}>
+                      <View style={styles.detailRow}>
                          <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
                            <Ionicons name="trending-up" size={16} color="#00B894" style={{ marginStart: 4 }} />
-                           <Text style={[styles.detailLabel, { color: theme.colors.textSecondary, fontFamily: 'Tajawal_700Bold' }]}>العمولة الصافية:</Text>
+                           <Text style={[styles.detailLabel, { color: theme.colors.textSecondary, fontFamily: 'Tajawal_700Bold' }]}>صافي ربحك من هذا الطلب:</Text>
                          </View>
-                         <Text style={[styles.profitValue, { color: '#00B894' }]}>{formatCurrency(profit)} <Text style={{ fontSize: 12 }}>({profitPercentage.toFixed(1)}%)</Text></Text>
+                         <Text style={[styles.profitValue, { color: '#00B894' }]}>{formatCurrency(profit)}</Text>
                       </View>
 
-                      {/* Profit Guide */}
-                      <View style={[styles.profitGuide, { backgroundColor: profitPercentage > 40 ? '#FFF5F5' : '#F0FFF4' }]}>
-                        <Ionicons 
-                          name={profitPercentage > 40 ? "alert-circle" : "bulb-outline"} 
-                          size={16} 
-                          color={profitPercentage > 40 ? "#FF6B6B" : "#38A169"} 
-                        />
-                        <Text style={[styles.guideText, { color: profitPercentage > 40 ? "#C53030" : "#2F855A" }]}>
-                          {profitPercentage > 40 
-                            ? "تنبيه: هامش الربح مرتفع جداً قد يؤدي لرفض الطلب من الزبون." 
-                            : profitPercentage < 10 && profit > 0
-                            ? "نصيحة: هامش الربح قليل، تأكد من تغطية جهدك التسويقي."
-                            : profit <= 0 
-                            ? "خطأ: سعر البيع يجب أن يكون أعلى من سعر الجملة."
-                            : "ممتاز: هذا الهامش متوازن ويشجع على إتمام الطلبات."}
+                      <View style={[styles.profitGuide, { backgroundColor: '#F0FFF4', marginTop: 12 }]}>
+                        <Ionicons name="shield-checkmark-outline" size={16} color="#38A169" />
+                        <Text style={[styles.guideText, { color: "#2F855A" }]}>
+                          هذا السعر والعمولة تم تحديدهما من قبل صاحب المتجر لضمان أفضل سعر للزبون وأرباح عادلة لك.
                         </Text>
                       </View>
                    </View>

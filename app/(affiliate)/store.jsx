@@ -12,19 +12,29 @@ import {
   useWindowDimensions,
   TextInput,
   Modal,
-  Animated,
   I18nManager,
-  ActivityIndicator
+  ActivityIndicator,
+  Easing
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-// UPDATED: Import FileSystem correctly for modern API usage
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import Animated, { 
+  useSharedValue, 
+  useAnimatedStyle, 
+  withTiming, 
+  withRepeat, 
+  withSequence,
+  Easing as ReanimatedEasing,
+  interpolate,
+  useDerivedValue
+} from 'react-native-reanimated';
 
 import { useCampaignStore } from '../../src/stores/useCampaignStore';
 import { useTheme } from '../../src/hooks/useTheme';
@@ -38,189 +48,13 @@ import EmptyState from '../../src/components/ui/EmptyState';
 import LoadingSpinner from '../../src/components/ui/LoadingSpinner';
 import BottomSheet from '../../src/components/ui/BottomSheet';
 import Button from '../../src/components/ui/Button';
+import ImageGallery from '../../src/components/common/ImageGallery';
 
 import { typography, spacing, borderRadius } from '../../src/theme/theme';
 import { formatCurrency, generateReferralLink, generateCampaignLink } from '../../src/lib/utils';
 
 const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/400x400.png?text=لا+توجد+صورة';
 
-const ProductCarousel = ({ images, height, borderRadius = 0 }) => {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const [isDownloading, setIsDownloading] = useState(false);
-  const flatListRef = useRef(null);
-  const isWeb = Platform.OS === 'web';
-  const isRTL = I18nManager.isRTL;
-
-  useEffect(() => {
-    setActiveIndex(0);
-    if (flatListRef.current && containerWidth > 0) {
-      flatListRef.current.scrollToOffset({ offset: 0, animated: false });
-    }
-  }, [images, containerWidth]);
-
-  const handleScroll = (event) => {
-    if (containerWidth > 0) {
-      const offset = event.nativeEvent.contentOffset.x;
-      const index = Math.round(offset / containerWidth);
-      if (index !== activeIndex && index >= 0 && index < images.length) {
-        setActiveIndex(index);
-      }
-    }
-  };
-
-  const handleDownload = async () => {
-    const currentImage = images[activeIndex];
-    if (!currentImage) return;
-
-    setIsDownloading(true);
-    try {
-      if (Platform.OS === 'web') {
-        const response = await fetch(currentImage);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.style.display = 'none';
-        link.href = url;
-        link.download = `product-image-${Date.now()}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(link);
-      } else {
-        // FIXED: Using modern, non-deprecated FileSystem API for SDK 51+
-        const filename = `product-image-${Date.now()}.jpg`;
-        const fileUri = `${FileSystem.documentDirectory}${filename}`;
-
-        const downloadResumable = FileSystem.createDownloadResumable(
-          currentImage,
-          fileUri,
-          {}
-        );
-
-        const result = await downloadResumable.downloadAsync();
-
-        if (result && await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(result.uri);
-        } else {
-          // Fallback or error message if sharing is not available
-          console.log("Sharing is not available on this device.");
-        }
-      }
-    } catch (error) {
-      console.error("Download failed:", error);
-      // Fallback for web in case of CORS or other fetch issues
-      if (Platform.OS === 'web') {
-        window.open(currentImage, '_blank');
-      }
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
-  if (!images || images.length === 0) {
-    return (
-      <View style={[{ width: '100%', borderRadius, overflow: 'hidden' }, height === '100%' ? { flex: 1 } : { height }]}>
-        <Image source={{ uri: PLACEHOLDER_IMAGE }} style={styles.imgFill} contentFit="cover" transition={200} />
-      </View>
-    );
-  }
-
-  const scrollToIndex = (index) => {
-    if (index >= 0 && index < images.length && flatListRef.current) {
-      flatListRef.current.scrollToIndex({ index, animated: true });
-      setActiveIndex(index);
-    }
-  };
-
-  return (
-    <View
-      style={[{ width: '100%', borderRadius, overflow: 'hidden', position: 'relative', backgroundColor: '#F0F0F0' }, height === '100%' ? { flex: 1 } : { height }]}
-      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-    >
-      {/* FIXED: Only render FlatList when its container has a calculated width to prevent web rendering bugs */}
-      {containerWidth > 0 ? (
-        <FlatList
-          ref={flatListRef}
-          data={images}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          bounces={false}
-          keyExtractor={(_, index) => `img-${index}`}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          getItemLayout={(_, index) => ({
-            length: containerWidth,
-            offset: containerWidth * index,
-            index,
-          })}
-          onScrollToIndexFailed={() => { /* Graceful fail */ }}
-          renderItem={({ item }) => (
-            <View style={{ width: containerWidth, height: '100%' }}>
-              <Image source={{ uri: item }} style={styles.imgFill} contentFit="cover" transition={200} />
-            </View>
-          )}
-        />
-      ) : (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator color="#888" />
-        </View>
-      )}
-
-      {/* Download Button */}
-      <TouchableOpacity
-        style={[styles.downloadBtn, isRTL ? { right: 12 } : { left: 12 }]}
-        onPress={handleDownload}
-        disabled={isDownloading}
-      >
-        {isDownloading ? (
-          <ActivityIndicator size="small" color="#333" />
-        ) : (
-          <Ionicons name="download-outline" size={20} color="#333" />
-        )}
-      </TouchableOpacity>
-
-      {/* Web Arrow Buttons */}
-      {isWeb && images.length > 1 && (
-        <>
-          {((isRTL && activeIndex < images.length - 1) || (!isRTL && activeIndex > 0)) && (
-            <TouchableOpacity
-              style={[styles.carouselArrow, { left: 10 }]}
-              onPress={() => scrollToIndex(isRTL ? activeIndex + 1 : activeIndex - 1)}
-            >
-              <Ionicons name="chevron-back" size={24} color="#333" />
-            </TouchableOpacity>
-          )}
-          {((isRTL && activeIndex > 0) || (!isRTL && activeIndex < images.length - 1)) && (
-            <TouchableOpacity
-              style={[styles.carouselArrow, { right: 10 }]}
-              onPress={() => scrollToIndex(isRTL ? activeIndex - 1 : activeIndex + 1)}
-            >
-              <Ionicons name="chevron-forward" size={24} color="#333" />
-            </TouchableOpacity>
-          )}
-        </>
-      )}
-
-      {images.length > 1 && (
-        <View style={styles.paginationDots}>
-          {images.map((_, i) => (
-            <TouchableOpacity
-              key={`dot-${i}`}
-              onPress={() => scrollToIndex(i)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={[
-                styles.dot,
-                { opacity: i === activeIndex ? 1 : 0.5, transform: [{ scale: i === activeIndex ? 1.2 : 1 }] }
-              ]}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
-};
 
 // ──── Sort options ────
 const SORT_OPTIONS = [
@@ -237,6 +71,47 @@ const PRICE_PRESETS = [
   { label: '3000 - 5000', min: 3000, max: 5000 },
   { label: '5000+', min: 5000, max: null },
 ];
+
+// ──── MODERN SHIMMER COMPONENT ────
+const ModernShimmer = ({ visible = true }) => {
+  const shimmerValue = useSharedValue(-1);
+
+  useEffect(() => {
+    if (visible) {
+      shimmerValue.value = withRepeat(
+        withTiming(2, {
+          duration: 1500,
+          easing: ReanimatedEasing.bezier(0.4, 0, 0.2, 1),
+        }),
+        -1,
+        false
+      );
+    }
+  }, [visible]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{
+      translateX: interpolate(
+        shimmerValue.value,
+        [-1, 2],
+        [-150, 300]
+      )
+    }],
+  }));
+
+  if (!visible) return null;
+
+  return (
+    <Animated.View style={[StyleSheet.absoluteFillObject, animatedStyle]}>
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.4)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={{ flex: 1, width: '60%' }}
+      />
+    </Animated.View>
+  );
+};
 
 export default function StoreScreen() {
   const theme = useTheme();
@@ -270,11 +145,21 @@ export default function StoreScreen() {
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const filterPanelAnim = useRef(new Animated.Value(0)).current;
+  const filterPanelProgress = useSharedValue(0);
 
   // Debounced search
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const searchTimerRef = useRef(null);
+
+  useEffect(() => {
+    filterPanelProgress.value = withTiming(showFilters ? 1 : 0, { duration: 250 });
+  }, [showFilters]);
+
+  const filterAnimatedStyle = useAnimatedStyle(() => ({
+    height: interpolate(filterPanelProgress.value, [0, 1], [0, 220]),
+    opacity: filterPanelProgress.value,
+    overflow: 'hidden'
+  }));
 
   // Sheet & Modal State
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -286,40 +171,42 @@ export default function StoreScreen() {
   // Gallery Logic
   const galleryImages = useMemo(() => {
     if (!selectedProduct) return [];
-
-    // 1. Prioritize the new gallery_urls array
-    if (selectedProduct.gallery_urls && Array.isArray(selectedProduct.gallery_urls) && selectedProduct.gallery_urls.length > 0) {
-      return selectedProduct.gallery_urls;
-    }
-
-    // 2. Fallback to legacy structure
-    const images = [];
-    if (selectedProduct.image_url) images.push(selectedProduct.image_url);
-
-    if (selectedProduct.product_images && selectedProduct.product_images.length > 0) {
-      const sortedExtras = [...selectedProduct.product_images].sort((a, b) =>
-        (a.display_order || 0) - (b.display_order || 0)
-      );
-
-      sortedExtras.forEach(img => {
-        if (img.image_url && img.image_url !== selectedProduct.image_url) {
-          images.push(img.image_url);
-        }
-      });
-    }
-    return images;
+    const imgs = [
+      selectedProduct.image_url,
+      ...(selectedProduct.gallery_urls || []),
+      ...(selectedProduct.product_images?.map(img => img.image_url) || [])
+    ].filter(Boolean);
+    return [...new Set(imgs)];
   }, [selectedProduct]);
 
   // Animation Value for Web Fade
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeProgress = useSharedValue(0);
+
+  useEffect(() => {
+    if (isWebModal) {
+      fadeProgress.value = withTiming(sheetVisible ? 1 : 0, { duration: 250 });
+    }
+  }, [sheetVisible, isWebModal]);
+
+  const webModalAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: fadeProgress.value,
+  }));
 
   const loadData = useCallback(async () => {
     const targetStoreId = profile?.store_id;
-    await Promise.all([
-      fetchProducts(targetStoreId),
-      fetchCategories(),
-      fetchAffiliateProfile(targetStoreId)
-    ]);
+    try {
+      if (targetStoreId) {
+        await fetchProducts(targetStoreId);
+        await fetchCategories();
+        await fetchAffiliateProfile(targetStoreId);
+      } else {
+        await fetchAffiliateProfile();
+        await fetchProducts();
+        await fetchCategories();
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[Store] loadData error:', e);
+    }
   }, [profile?.store_id, fetchAffiliateProfile, fetchProducts, fetchCategories]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -333,15 +220,7 @@ export default function StoreScreen() {
     }
   }, [affiliateProfile?.id, products, fetchActiveCampaignsByProducts]);
 
-  useEffect(() => {
-    if (isWebModal) {
-      Animated.timing(fadeAnim, {
-        toValue: sheetVisible ? 1 : 0,
-        duration: 250,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [sheetVisible, isWebModal]);
+
 
   // Web Browser Back Button Handler
   useEffect(() => {
@@ -374,14 +253,7 @@ export default function StoreScreen() {
     };
   }, [searchQuery]);
 
-  // ──── Filter Panel Animation ────
-  useEffect(() => {
-    Animated.timing(filterPanelAnim, {
-      toValue: showFilters ? 1 : 0,
-      duration: 250,
-      useNativeDriver: false,
-    }).start();
-  }, [showFilters]);
+
 
   const campaignByProductId = useMemo(() => {
     const m = {};
@@ -531,7 +403,7 @@ export default function StoreScreen() {
 
     setTimeout(() => {
       const camp = campaignByProductId[product.id];
-      const base = `productId=${product.id}&productName=${encodeURIComponent(product.name)}&productPrice=${product.price}&commissionRate=${product.commission_rate}&storeId=${product.store_id}`;
+      const base = `productId=${product.id}&productName=${encodeURIComponent(product.name)}&productPrice=${product.price}&merchantCommission=${product.commission_amount || 0}&storeId=${product.store_id}`;
       const q = camp?.id ? `${base}&campaignId=${camp.id}&salePrice=${camp.sale_price}` : base;
 
       router.push(`/submit-order?${q}`);
@@ -549,14 +421,11 @@ export default function StoreScreen() {
 
   const closeModal = () => {
     if (isWebModal) {
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => {
+      fadeProgress.value = withTiming(0, { duration: 200 });
+      setTimeout(() => {
         setSheetVisible(false);
         setSelectedProduct(null);
-      });
+      }, 200);
     } else {
       setSheetVisible(false);
       setTimeout(() => setSelectedProduct(null), 300);
@@ -618,14 +487,7 @@ export default function StoreScreen() {
     return sorted;
   }, [products, filterCategory, filterSubcategory, debouncedSearch, priceMin, priceMax, sortBy]);
 
-  const CommissionInfoBox = () => (
-    <View style={[styles.infoBox, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '25' }]}>
-      <Ionicons name="information-circle" size={18} color={theme.primary} />
-      <Text style={[styles.infoBoxText, { color: theme.colors.textSecondary }]}>
-        يمكنك تحديد نسبة عمولتك الخاصة بحرية وإضافتها على سعر المنتج عند تقديم الطلب للعميل.
-      </Text>
-    </View>
-  );
+
 
   // --- RENDER WEB OVERLAY (FADE ONLY, NO SLIDE) ---
   const renderWebOverlay = () => {
@@ -633,7 +495,7 @@ export default function StoreScreen() {
 
     return (
       <Modal transparent visible={sheetVisible} animationType="none" onRequestClose={closeModal}>
-        <Animated.View style={[styles.webModalOverlay, { opacity: fadeAnim }]}>
+        <Animated.View style={[styles.webModalOverlay, webModalAnimatedStyle]}>
           <View style={[styles.webModalContainer, { width: isDesktop ? 950 : 750, backgroundColor: theme.colors.surface }]}>
 
             <TouchableOpacity
@@ -660,12 +522,22 @@ export default function StoreScreen() {
 
                 <View style={[styles.sheetPriceCard, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.lg }]}>
                   <View style={styles.sheetPriceRow}>
-                    <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>السعر الأساسي:</Text>
-                    <Text style={[styles.sheetPriceValue, { color: theme.primary }]}>
+                    <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>سعر الجملة:</Text>
+                    <Text style={[styles.sheetPriceValue, { color: theme.colors.text }]}>
                       {formatCurrency(selectedProduct.price)}
                     </Text>
                   </View>
-                  <CommissionInfoBox />
+
+                  <View style={[styles.commissionHighlightCard, { backgroundColor: '#10B98115', borderColor: '#10B98130' }]}>
+                    <View style={styles.commissionHeader}>
+                      <Ionicons name="wallet" size={16} color="#10B981" />
+                      <Text style={[styles.commissionTitle, { color: '#10B981' }]}>صافي ربحك</Text>
+                    </View>
+                    <Text style={[styles.commissionLargeValue, { color: '#10B981' }]}>
+                      {formatCurrency(Math.max(0, (selectedProduct.commission_amount || 0) - 200))}
+                    </Text>
+                    <Text style={{ color: '#6B7280', fontSize: 11, fontFamily: 'Tajawal_500Medium', marginTop: 4 }}>(بعد خصم رسوم المنصة 200 د.ج)</Text>
+                  </View>
                 </View>
 
                 {!!selectedProduct.description && (
@@ -706,7 +578,7 @@ export default function StoreScreen() {
             </View>
 
             <View style={styles.webModalImageArea}>
-              <ProductCarousel
+              <ImageGallery
                 images={galleryImages}
                 height="100%"
                 borderRadius={0}
@@ -733,11 +605,13 @@ export default function StoreScreen() {
         <View style={[styles.sheetContentWrapper, { maxHeight: isSmallScreen ? height * 0.75 : height * 0.85 }]}>
           <ScrollView style={styles.sheetScrollArea} contentContainerStyle={styles.sheetScrollContent} showsVerticalScrollIndicator={false} bounces={false}>
 
-            <View style={{ height: 280, width: '100%', marginBottom: spacing.md, elevation: 0 }}>
-              <ProductCarousel
+            <View style={{ height: 280, width: '100%', marginBottom: spacing.md, zIndex: 10, elevation: 2, position: 'relative' }}>
+              <ImageGallery
                 images={galleryImages}
                 height={280}
-                borderRadius={0}
+                borderRadius={5}
+                // يفضل إخفاء الأسهم في الهاتف والاعتماد على السحب (Swipe)، يمكنك إزالة هذا السطر إذا أردت إبقاءها
+                showArrows={Platform.OS === 'web'}
               />
             </View>
 
@@ -753,12 +627,22 @@ export default function StoreScreen() {
 
             <View style={[styles.sheetPriceCard, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.lg }]}>
               <View style={styles.sheetPriceRow}>
-                <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>السعر الأساسي:</Text>
-                <Text style={[styles.sheetPriceValue, { color: theme.primary }]}>
+                <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>سعر الجملة:</Text>
+                <Text style={[styles.sheetPriceValue, { color: theme.colors.text, fontSize: 20 }]}>
                   {formatCurrency(selectedProduct.price)}
                 </Text>
               </View>
-              <CommissionInfoBox />
+
+              <View style={[styles.commissionHighlightCard, { backgroundColor: '#10B98115', borderColor: '#10B98130', marginTop: 12 }]}>
+                <View style={styles.commissionHeader}>
+                  <Ionicons name="wallet" size={16} color="#10B981" />
+                  <Text style={[styles.commissionTitle, { color: '#10B981' }]}>صافي ربحك</Text>
+                </View>
+                <Text style={[styles.commissionLargeValue, { color: '#10B981' }]}>
+                  {formatCurrency(Math.max(0, (selectedProduct.commission_amount || 0) - 200))}
+                </Text>
+                <Text style={{ color: '#6B7280', fontSize: 11, fontFamily: 'Tajawal_500Medium', marginTop: 4 }}>(بعد خصم رسوم المنصة 200 د.ج)</Text>
+              </View>
             </View>
 
             {!!selectedProduct.description && (
@@ -810,26 +694,69 @@ export default function StoreScreen() {
   // --- RENDER PRODUCT CARD ---
   const renderProductCard = ({ item }) => {
     const hasCampaign = !!campaignByProductId[item.id];
+    const commission = item.commission_amount || 0;
 
     return (
       <TouchableOpacity
-        style={[styles.gridCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, flex: 1 / numColumns }]}
-        activeOpacity={0.85}
+        style={[
+          styles.gridCard,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border,
+            flex: 1 / numColumns,
+          }
+        ]}
+        activeOpacity={0.9}
         onPress={() => openProductDetails(item)}
       >
         <View style={styles.imageWrapper}>
-          <Image source={{ uri: item.image_url || PLACEHOLDER_IMAGE }} style={styles.gridImage} contentFit="cover" transition={200} />
+          <Image
+            source={{ uri: item.image_url || PLACEHOLDER_IMAGE }}
+            style={styles.gridImage}
+            contentFit="cover"
+            transition={400}
+          />
+
+          {/* Commission Badge with better design */}
+          <View style={styles.cardCommissionBadgeContainer}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              style={styles.cardCommissionBadgeGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <ModernShimmer />
+
+              <Text style={styles.cardCommissionLabel}>ربحك</Text>
+              <Text style={styles.cardCommissionValue}>{formatCurrency(Math.max(0, commission - 200))}</Text>
+            </LinearGradient>
+          </View>
+
           {hasCampaign && (
-            <View style={styles.campaignTag}>
-              <Ionicons name="flash" size={12} color="#FFF" />
+            <View style={styles.campaignFlash}>
+              <Ionicons name="flash" size={14} color="#FFF" />
             </View>
           )}
         </View>
 
         <View style={styles.gridContent}>
-          <Text style={[styles.gridTitle, { color: theme.colors.text }]} numberOfLines={2}>{item.name}</Text>
+          <Text style={[styles.gridTitle, { color: theme.colors.text }]} numberOfLines={2}>
+            {item.name}
+          </Text>
+
+          <View style={styles.cardDivider} />
+
           <View style={styles.gridPriceRow}>
-            <Text style={[styles.gridPrice, { color: theme.primary }]}>{formatCurrency(item.price)}</Text>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={[styles.gridPriceLabel, { color: theme.colors.textTertiary }]}>سعر البيع</Text>
+              <Text style={[styles.gridPrice, { color: theme.colors.text }]}>
+                {formatCurrency(item.price)}
+              </Text>
+            </View>
+
+            <View style={[styles.arrowCircle, { backgroundColor: theme.primary + '10' }]}>
+              <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+            </View>
           </View>
         </View>
       </TouchableOpacity>
@@ -845,15 +772,7 @@ export default function StoreScreen() {
     return 'لا توجد منتجات متاحة في المتجر حالياً.';
   }, [debouncedSearch, priceMin, priceMax, filterSubcategory, filterCategory]);
 
-  // ──── Filter panel max height interpolation ────
-  const filterPanelHeight = filterPanelAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 220],
-  });
-  const filterPanelOpacity = filterPanelAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0, 0.5, 1],
-  });
+
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top']}>
@@ -897,7 +816,7 @@ export default function StoreScreen() {
               {/* Filter toggle button */}
               <TouchableOpacity
                 onPress={() => {
-                  if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+                  if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => { });
                   setShowFilters(!showFilters);
                 }}
                 style={[
@@ -945,7 +864,7 @@ export default function StoreScreen() {
                       ]}
                     >
                       <Ionicons name={cat.icon || 'grid-outline'} size={14} color={isSelected ? '#FFF' : theme.colors.textSecondary} style={{ marginEnd: 4 }} />
-                      <Text style={[styles.filterChipText, { color: isSelected ? '#FFF' : theme.colors.textSecondary }]}>{cat.name}</Text>
+                      <Text style={[styles.filterChipText, { color: isSelected ? '#FFF' : theme.colors.textSecondary }]}>{cat.name_ar || cat.name}</Text>
                       <Text style={[styles.filterChipCount, { color: isSelected ? 'rgba(255,255,255,0.7)' : theme.colors.textTertiary }]}> ({count})</Text>
                     </TouchableOpacity>
                   );
@@ -978,7 +897,7 @@ export default function StoreScreen() {
                         ]}
                       >
                         <Ionicons name={sub.icon || 'ellipse-outline'} size={12} color={isSelected ? theme.primary : theme.colors.textTertiary} style={{ marginEnd: 3 }} />
-                        <Text style={[styles.filterChipText, { color: isSelected ? theme.primary : theme.colors.textSecondary, fontSize: 12 }]}>{sub.name}</Text>
+                        <Text style={[styles.filterChipText, { color: isSelected ? theme.primary : theme.colors.textSecondary, fontSize: 12 }]}>{sub.name_ar || sub.name}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -987,7 +906,7 @@ export default function StoreScreen() {
             )}
 
             {/* ──── Collapsible Advanced Filters Panel ──── */}
-            <Animated.View style={[styles.advancedFiltersPanel, { maxHeight: filterPanelHeight, opacity: filterPanelOpacity }]}>
+            <Animated.View style={[styles.advancedFiltersPanel, filterAnimatedStyle]}>
               {/* Sort options */}
               <View style={styles.sortSection}>
                 <Text style={[styles.filterSectionLabel, { color: theme.colors.textSecondary }]}>الترتيب</Text>
@@ -998,7 +917,7 @@ export default function StoreScreen() {
                       <TouchableOpacity
                         key={opt.key}
                         onPress={() => {
-                          if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
+                          if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => { });
                           setSortBy(opt.key);
                         }}
                         style={[
@@ -1168,15 +1087,104 @@ const styles = StyleSheet.create({
   listContent: { padding: spacing.sm, paddingBottom: 200 },
   columnWrapper: { gap: spacing.sm, marginBottom: spacing.sm },
 
-  gridCard: { borderRadius: borderRadius.md, borderWidth: 1, overflow: 'hidden', marginHorizontal: spacing.xs, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 2 },
-  imageWrapper: { width: '100%', aspectRatio: 1.15, backgroundColor: '#F9F9F9', position: 'relative', borderTopLeftRadius: borderRadius.md, borderTopRightRadius: borderRadius.md, overflow: 'hidden' },
+  gridCard: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginHorizontal: 4,
+  },
+  imageWrapper: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#F5F5F5',
+    position: 'relative',
+    overflow: 'hidden'
+  },
   gridImage: { width: '100%', height: '100%' },
-  campaignTag: { position: 'absolute', top: 6, right: 6, backgroundColor: '#6C5CE7', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', elevation: 0 },
 
-  gridContent: { padding: spacing.xs },
-  gridTitle: { ...typography.bodyBold, fontSize: 13, textAlign: 'right', lineHeight: 18, height: 36, marginBottom: 4 },
-  gridPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  gridPrice: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 14 },
+  cardCommissionBadgeContainer: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    left: 0,
+    alignItems: 'center',
+  },
+  cardCommissionBadgeGradient: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 80,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardCommissionLabel: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 11,
+    fontFamily: 'Tajawal_700Bold',
+  },
+  cardCommissionValue: {
+    color: '#FFF',
+    fontSize: 14,
+    fontFamily: 'Tajawal_800ExtraBold',
+  },
+  campaignFlash: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#8B5CF6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  gridContent: {
+    padding: 10,
+    paddingTop: 8,
+  },
+  gridTitle: {
+    ...typography.bodyBold,
+    fontSize: 14,
+    textAlign: 'right',
+    lineHeight: 18,
+    height: 36,
+    marginBottom: 6,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    marginBottom: 8,
+  },
+  gridPriceRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  gridPriceLabel: {
+    fontSize: 11,
+    fontFamily: 'Tajawal_500Medium',
+    textAlign: 'right',
+    marginBottom: 0,
+  },
+  gridPrice: {
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 16
+  },
+  arrowCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   infoBox: { flexDirection: 'row', alignItems: 'center', padding: spacing.sm, borderRadius: borderRadius.md, borderWidth: 1, gap: 8 },
   infoBoxText: { flex: 1, fontFamily: 'Tajawal_500Medium', fontSize: 12, lineHeight: 18, textAlign: 'right' },
@@ -1191,6 +1199,7 @@ const styles = StyleSheet.create({
   },
   webModalContainer: {
     flexDirection: 'row',
+    alignItems: 'stretch',
     height: 550,
     maxHeight: '90%',
     borderRadius: borderRadius.xl,
@@ -1219,72 +1228,75 @@ const styles = StyleSheet.create({
   sheetTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   sheetTitle: { ...typography.h3, textAlign: 'right', flex: 1, lineHeight: 28 },
   sheetCampaignBadge: { backgroundColor: '#8B5CF6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, gap: 4, marginStart: 12 },
-  sheetCampaignText: { color: '#FFF', fontSize: 12, fontFamily: 'Tajawal_700Bold' },
-
-  sheetPriceCard: { padding: spacing.md, marginHorizontal: spacing.lg, marginBottom: spacing.md, overflow: 'hidden' },
-  sheetPriceRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sheetPriceLabel: { fontFamily: 'Tajawal_500Medium', fontSize: 14 },
-  sheetPriceValue: { fontFamily: 'Tajawal_800ExtraBold', fontSize: 24 },
-
-  descSection: { marginTop: spacing.xs, paddingHorizontal: spacing.lg },
-  descTitle: { ...typography.bodyBold, marginBottom: spacing.xs, textAlign: 'right', fontSize: 16 },
-  descText: { ...typography.body, fontSize: 14, lineHeight: 24, textAlign: 'right', opacity: 0.8 },
-
-  sheetIconBtn: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
-  sheetOrderBtn: { flex: 1, height: 52 },
-
-  // Gallery Helpers
-  imgFill: { width: '100%', height: '100%' },
-  carouselArrow: {
-    position: 'absolute',
-    top: '50%',
-    marginTop: -18,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+  sheetCampaignText: { color: '#FFF', fontSize: 10, fontFamily: 'Tajawal_700Bold' },
+  sheetPriceCard: {
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
-  downloadBtn: {
-    position: 'absolute',
-    top: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
+  sheetPriceRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    zIndex: 20,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
   },
-  paginationDots: {
-    position: 'absolute',
-    bottom: 12,
-    left: 0,
-    right: 0,
+  sheetPriceLabel: {
+    fontFamily: 'Tajawal_500Medium',
+    fontSize: 14,
+  },
+  sheetPriceValue: {
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 18,
+  },
+
+  commissionHighlightCard: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  commissionHeader: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     gap: 6,
-    zIndex: 10,
+    marginBottom: 4,
   },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFF',
-    elevation: 0,
-    shadowOpacity: 0
+  commissionTitle: {
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 13,
+  },
+  commissionLargeValue: {
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 22,
+  },
+
+  descSection: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.xs,
+  },
+  descTitle: {
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 15,
+    marginBottom: 8,
+    textAlign: 'right',
+  },
+  descText: {
+    fontFamily: 'Tajawal_500Medium',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'right',
+  },
+
+  sheetIconBtn: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  sheetOrderBtn: {
+    flex: 1,
+    height: 48,
   },
 });
