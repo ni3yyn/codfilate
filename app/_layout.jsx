@@ -9,7 +9,8 @@ import {
   Tajawal_400Regular,
   Tajawal_500Medium,
   Tajawal_700Bold,
-  Tajawal_800ExtraBold
+  Tajawal_800ExtraBold,
+  Tajawal_900Black
 } from '@expo-google-fonts/tajawal';
 import { useAuthStore } from '../src/stores/useAuthStore';
 import { usePushRegistration } from '../src/hooks/usePushNotifications';
@@ -37,6 +38,9 @@ function useRTL() {
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         document.documentElement.dir = 'rtl';
         document.body.dir = 'rtl';
+        // Web strict overscroll prevention
+        document.body.style.overscrollBehavior = 'none';
+        document.body.style.overflow = 'hidden';
       }
     } catch (e) {
       console.warn('RTL Setup Error:', e);
@@ -194,22 +198,15 @@ export default function RootLayout() {
 
   useRTL();
 
-
   const initialize = useAuthStore((s) => s.initialize);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const userId = useAuthStore((s) => s.user?.id);
   const profile = useAuthStore((s) => s.profile);
 
-
   const segments = useSegments();
-
-
   const router = useRouter();
-
-
   const navigationState = useRootNavigationState();
-
 
   const hasNavigated = useRef(false);
 
@@ -223,22 +220,19 @@ export default function RootLayout() {
     }
   }, [isAuthenticated, userId]);
 
-
   const mode = useThemeStore((s) => s.mode);
   const themeColors = mode === 'dark' ? colors.dark : colors.light;
-
 
   const [fontsLoaded, fontError] = useFonts({
     Tajawal_400Regular,
     Tajawal_500Medium,
     Tajawal_700Bold,
     Tajawal_800ExtraBold,
+    Tajawal_900Black,
   });
-
 
   const [securityStatus, setSecurityStatus] = React.useState({ isSecure: true, threats: [] });
   const [initError, setInitError] = React.useState(null);
-
 
   useEffect(() => {
     async function startApp() {
@@ -262,12 +256,8 @@ export default function RootLayout() {
     if (Platform.OS === 'android') {
       const setupAndroidNavigation = async () => {
         try {
-          // 1. Button styling (Dark nav buttons on light theme, light on dark)
-          // This is still required and supported even in edge-to-edge mode
           const barStyle = mode === 'dark' ? 'light' : 'dark';
           await NavigationBar.setButtonStyleAsync(barStyle);
-          
-
         } catch (error) {
           console.warn('NavigationBar setup failed:', error);
         }
@@ -329,10 +319,7 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
-
-
   if (!fontsLoaded && !fontError) {
-
     return null;
   }
 
@@ -350,8 +337,6 @@ export default function RootLayout() {
   if (initError && !__DEV__) {
     return <DiagnosticScreen title="خطأ فادح في البداية" subtitle={initError.message} />;
   }
-
-
 
   // Catch any native-level errors during route resolution
   const origHandler = ErrorUtils.getGlobalHandler();
@@ -400,10 +385,12 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    overflow: 'hidden', // PREVENTS ENTIRE APP FROM BOUNCING ON OVERSCROLL
   },
   webRoot: {
-    minHeight: '100vh',
+    height: '100%', // Fixed mobile browser URL bar jump issue (prev: minHeight: '100vh')
     width: '100%',
     maxWidth: '100%',
+    overflow: 'hidden', // Ensures web doesn't scroll the root body
   },
 });

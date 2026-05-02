@@ -59,7 +59,11 @@ export default function Index() {
 
     if (!isAuthenticated) {
       hasNavigated.current = true;
-      router.replace("/home");
+      if (Platform.OS === 'android') {
+        router.replace("/(auth)/login");
+      } else {
+        router.replace("/home");
+      }
       return;
     }
 

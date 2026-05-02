@@ -8,11 +8,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   Animated,
+  Easing,
+  useWindowDimensions,
+  I18nManager
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useAuthStore } from "../../src/stores/useAuthStore";
 import { useTheme } from "../../src/hooks/useTheme";
 import Button from "../../src/components/ui/Button";
@@ -33,10 +36,54 @@ import {
 } from "../../src/lib/roleRouter";
 import { useResponsive } from "../../src/hooks/useResponsive";
 
+// Hardcoded Premium Tokens to ensure exact match with App.js aesthetics
+const COLORS = {
+  primary: '#2D6A4F',
+  primaryHover: '#1B4332',
+  primaryLight: '#E8F5E9',
+  accentMint: '#74C69D',
+  bgMain: '#F8F9FA',
+  bgWhite: '#FFFFFF',
+  textMain: '#0F172A',
+  textMuted: '#475569',
+  textLight: '#94A3B8',
+  danger: '#EF4444',
+  border: 'rgba(15, 23, 42, 0.08)',
+};
+
+// Purely Circular Cinematic Background
+const RegisterCinematicBackground = ({ isDark }) => {
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(Animated.timing(spinAnim, { toValue: 1, duration: 90000, easing: Easing.linear, useNativeDriver: true })).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(floatAnim, { toValue: 1, duration: 10000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(floatAnim, { toValue: 0, duration: 10000, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+    ])).start();
+  }, []);
+
+  const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const spinReverse = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+  const translateY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
+      <Animated.View style={[styles.bgRing1, { borderColor: isDark ? 'rgba(116, 198, 157, 0.06)' : 'rgba(45, 106, 79, 0.04)', transform: [{ rotate: spinReverse }] }]} />
+      <Animated.View style={[styles.bgRing2, { borderColor: isDark ? 'rgba(116, 198, 157, 0.04)' : 'rgba(45, 106, 79, 0.03)', transform: [{ rotate: spin }] }]} />
+      <Animated.View style={[styles.bgCircle, { backgroundColor: isDark ? 'rgba(116, 198, 157, 0.03)' : 'rgba(116, 198, 157, 0.06)', transform: [{ translateY }, { rotate: spin }] }]} />
+    </View>
+  );
+};
+
 export default function RegisterScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const { isWide } = useResponsive();
+
   const signUp = useAuthStore((s) => s.signUp);
   const isLoading = useAuthStore((s) => s.isLoading);
 
@@ -68,29 +115,22 @@ export default function RegisterScreen() {
   });
 
   const headerAnim = useRef(new Animated.Value(0)).current;
-  const formAnim = useRef(new Animated.Value(30)).current;
+  const headerScale = useRef(new Animated.Value(0.9)).current;
+  const formAnim = useRef(new Animated.Value(40)).current;
   const formOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.timing(headerAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-
     Animated.parallel([
-      Animated.timing(formAnim, {
-        toValue: 0,
-        duration: 500,
-        delay: 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(formOpacity, {
-        toValue: 1,
-        duration: 500,
-        delay: 150,
-        useNativeDriver: true,
-      }),
+      Animated.timing(headerAnim, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.spring(headerScale, { toValue: 1, friction: 8, tension: 40, useNativeDriver: true })
+    ]).start();
+
+    Animated.sequence([
+      Animated.delay(100),
+      Animated.parallel([
+        Animated.timing(formAnim, { toValue: 0, duration: 600, easing: Easing.out(Easing.exp), useNativeDriver: true }),
+        Animated.timing(formOpacity, { toValue: 1, duration: 600, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      ])
     ]).start();
   }, []);
 
@@ -142,17 +182,8 @@ export default function RegisterScreen() {
 
     const handlePress = () => {
       Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.97,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.spring(scaleAnim, {
-          toValue: 1,
-          friction: 6,
-          tension: 80,
-          useNativeDriver: true,
-        }),
+        Animated.timing(scaleAnim, { toValue: 0.95, duration: 100, useNativeDriver: true }),
+        Animated.spring(scaleAnim, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }),
       ]).start();
       setRole(value);
     };
@@ -161,65 +192,45 @@ export default function RegisterScreen() {
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
         <TouchableOpacity
           onPress={handlePress}
-          activeOpacity={0.8}
+          activeOpacity={0.9}
           style={[
             styles.roleOption,
             {
-              backgroundColor: isSelected
-                ? theme.primary + "10"
-                : theme.colors.surfaceElevated,
-              borderColor: isSelected ? theme.primary : theme.colors.border,
+              backgroundColor: isSelected ? 'rgba(116, 198, 157, 0.08)' : (theme.isDark ? '#1E293B' : COLORS.bgWhite),
+              borderColor: isSelected ? COLORS.primary : (theme.isDark ? '#334155' : COLORS.border),
             },
+            isSelected && styles.roleOptionActiveShadow
           ]}
         >
-          <LinearGradient
-            colors={
-              isSelected
-                ? [theme.primary + "30", theme.primary + "10"]
-                : [
-                    theme.colors.surface2 || theme.colors.borderLight,
-                    theme.colors.borderLight,
-                  ]
-            }
-            style={styles.roleIcon}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          {/* Radio Button (Right Side for RTL natural flow) */}
+          <View style={[
+            styles.radio,
+            {
+              borderColor: isSelected ? COLORS.primary : COLORS.textLight,
+              backgroundColor: isSelected ? COLORS.primary : "transparent",
+            },
+          ]}
           >
-            <Ionicons
-              name={icon}
-              size={24}
-              color={isSelected ? theme.primary : theme.colors.textSecondary}
-            />
-          </LinearGradient>
+            {isSelected && <Ionicons name="checkmark" size={14} color={COLORS.bgWhite} />}
+          </View>
+
+          {/* Text Content (Right Aligned, Next to Radio) */}
           <View style={styles.roleInfo}>
-            <Text
-              style={[
-                styles.roleLabel,
-                {
-                  color: isSelected ? theme.primary : theme.colors.text,
-                },
-              ]}
-            >
+            <Text style={[styles.roleLabel, { color: isSelected ? COLORS.primary : (theme.isDark ? COLORS.bgWhite : COLORS.textMain) }]}>
               {label}
             </Text>
-            <Text
-              style={[styles.roleDesc, { color: theme.colors.textSecondary }]}
-            >
+            <Text style={[styles.roleDesc, { color: theme.isDark ? '#94A3B8' : COLORS.textMuted }]}>
               {description}
             </Text>
           </View>
-          <View
-            style={[
-              styles.radio,
-              {
-                borderColor: isSelected ? theme.primary : theme.colors.border,
-                backgroundColor: isSelected ? theme.primary : "transparent",
-              },
-            ]}
-          >
-            {isSelected && (
-              <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-            )}
+
+          {/* Icon (Far Left Side) */}
+          <View style={[styles.roleIcon, { backgroundColor: isSelected ? COLORS.primary : (theme.isDark ? '#334155' : COLORS.bgMain) }]}>
+            <Ionicons
+              name={icon}
+              size={24}
+              color={isSelected ? COLORS.bgWhite : COLORS.textLight}
+            />
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -227,17 +238,8 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={[styles.root, { backgroundColor: theme.colors.background }]}>
-      <LinearGradient
-        colors={
-          theme.isDark
-            ? ["#1A1040", "#0A0A1A", "#0A0A1A"]
-            : ["#E8E5FF", "#F5F6FA", "#F5F6FA"]
-        }
-        style={styles.topGradient}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-      />
+    <View style={[styles.root, { backgroundColor: theme.isDark ? '#0A0A1A' : COLORS.bgMain }]}>
+      <RegisterCinematicBackground isDark={theme.isDark} />
 
       <SafeAreaView style={styles.safe}>
         <KeyboardAvoidingView
@@ -249,53 +251,48 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Header */}
-            <Animated.View style={[styles.header, { opacity: headerAnim }]}>
-              <Text style={[styles.title, { color: theme.colors.text }]}>
-                إنشاء حساب
+            {/* Orchestrated Header */}
+            <Animated.View style={[styles.header, { opacity: headerAnim, transform: [{ scale: headerScale }] }]}>
+              <View style={[styles.logoPulse, { width: isMobile ? 60 : 80, height: isMobile ? 60 : 80, borderRadius: isMobile ? 30 : 40 }]}>
+                <MaterialIcons name="person-add" size={isMobile ? 30 : 40} color={COLORS.bgWhite} />
+              </View>
+              <Text style={[styles.title, { color: theme.isDark ? COLORS.bgWhite : COLORS.textMain, marginTop: isMobile ? 16 : 24 }]}>
+                إنشاء <Text style={{ color: COLORS.primary }}>حساب</Text>
               </Text>
-              <Text
-                style={[styles.subtitle, { color: theme.colors.textSecondary }]}
-              >
-                اختر دورك للبدء
+              <Text style={[styles.subtitle, { color: theme.isDark ? '#94A3B8' : COLORS.textMuted }]}>
+                ابدأ رحلتك معنا واختر مسارك
               </Text>
             </Animated.View>
 
-            {/* Role Selection */}
+            {/* Role Selection Blocks */}
             <Animated.View
               style={[
                 styles.roleContainer,
-                {
-                  opacity: formOpacity,
-                  transform: [{ translateY: formAnim }],
-                },
+                { opacity: formOpacity, transform: [{ translateY: formAnim }] },
               ]}
             >
               <RoleOption
                 value={ROLES.MERCHANT}
-                label="تاجر"
+                label="تسجيل كتاجر"
                 icon="storefront-outline"
-                description="إنشاء متجر وبيع المنتجات"
+                description="لدي منتجات أريد عرضها وبيعها في المنصة"
               />
               <RoleOption
                 value={ROLES.AFFILIATE}
-                label="مسوق"
+                label="تسجيل كمسوق"
                 icon="megaphone-outline"
-                description="الترويج للمنتجات وكسب العمولات"
+                description="أريد تسويق المنتجات وجني العمولات"
               />
             </Animated.View>
 
-            {/* Form */}
+            {/* Premium Form Card */}
             <Animated.View
               style={[
                 styles.formCard,
+                Platform.OS === 'web' && { className: 'glass-panel' },
                 {
-                  backgroundColor: theme.isDark
-                    ? "rgba(19, 19, 43, 0.6)"
-                    : "rgba(255, 255, 255, 0.8)",
-                  borderColor: theme.isDark
-                    ? "rgba(255, 255, 255, 0.06)"
-                    : "rgba(0, 0, 0, 0.04)",
+                  backgroundColor: theme.isDark ? "rgba(30, 41, 59, 0.7)" : "rgba(255, 255, 255, 0.85)",
+                  borderColor: theme.isDark ? "rgba(255, 255, 255, 0.05)" : COLORS.border,
                   opacity: formOpacity,
                   transform: [{ translateY: formAnim }],
                 },
@@ -316,7 +313,7 @@ export default function RegisterScreen() {
                 keyboardType="email-address"
                 icon="mail-outline"
               />
-               <Input
+              <Input
                 label="رقم الهاتف"
                 value={phone}
                 onChangeText={setPhone}
@@ -343,45 +340,33 @@ export default function RegisterScreen() {
                 icon="lock-closed-outline"
               />
 
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>الولاية *</Text>
+              <Text style={[styles.label, { color: theme.isDark ? '#CBD5E1' : COLORS.textMain }]}>الولاية</Text>
               <TouchableOpacity
                 style={[
                   styles.picker,
                   {
-                    borderColor: theme.colors.border,
-                    backgroundColor: theme.colors.surfaceElevated,
+                    backgroundColor: theme.isDark ? '#1E293B' : COLORS.bgMain,
+                    borderColor: theme.isDark ? '#334155' : COLORS.border,
                   },
                 ]}
                 onPress={() => setWilayaModal(true)}
-                activeOpacity={0.7}
+                activeOpacity={0.8}
               >
-                <Ionicons
-                  name="location-outline"
-                  size={18}
-                  color={theme.colors.textSecondary}
-                />
+                <Ionicons name="location-outline" size={22} color={COLORS.textLight} />
                 <Text
-                  style={{
-                    color: selectedWilaya
-                      ? theme.colors.text
-                      : theme.colors.textTertiary,
-                    flex: 1,
-                    textAlign: 'right'
-                  }}
+                  style={[
+                    styles.pickerText,
+                    { color: selectedWilaya ? (theme.isDark ? '#FFFFFF' : COLORS.textMain) : COLORS.textLight }
+                  ]}
                 >
-                  {selectedWilaya
-                    ? `${selectedWilaya.code} — ${selectedWilaya.name}`
-                    : "اختر الولاية"}
+                  {selectedWilaya ? `${selectedWilaya.code} — ${selectedWilaya.name}` : "اختر ولايتك"}
                 </Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={18}
-                  color={theme.colors.textTertiary}
-                />
+                <Ionicons name="chevron-down" size={22} color={COLORS.textLight} />
               </TouchableOpacity>
 
               {error ? (
                 <View style={styles.errorContainer}>
+                  <MaterialIcons name="error-outline" size={20} color={COLORS.danger} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               ) : null}
@@ -390,23 +375,19 @@ export default function RegisterScreen() {
                 title="إنشاء حساب"
                 onPress={handleRegister}
                 loading={isLoading}
-                variant="gradient"
+                variant="primary"
                 style={styles.button}
+                icon="arrow-back"
               />
             </Animated.View>
 
-             {/* Footer */}
+            {/* Footer */}
             <Animated.View style={[styles.footer, { opacity: formOpacity }]}>
-              <Text
-                style={[
-                  styles.footerText,
-                  { color: theme.colors.textSecondary },
-                ]}
-              >
-                لديك حساب بالفعل؟{" "}
+              <Text style={[styles.footerText, { color: theme.isDark ? '#94A3B8' : COLORS.textMuted }]}>
+                لديك حساب بالفعل؟
               </Text>
               <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-                <Text style={[styles.link, { color: theme.primary }]}>
+                <Text style={[styles.link, { color: COLORS.primary }]}>
                   تسجيل الدخول
                 </Text>
               </TouchableOpacity>
@@ -417,11 +398,11 @@ export default function RegisterScreen() {
               onClose={() => setWilayaModal(false)}
               title="اختر الولاية"
             >
-              <View style={{ gap: spacing.md, paddingBottom: 40 }}>
+              <View style={{ gap: spacing.md, paddingBottom: 40, paddingTop: 10 }}>
                 <Input
                   value={wilayaSearch}
                   onChangeText={setWilayaSearch}
-                  placeholder="بحث عن ولاية..."
+                  placeholder="ابحث عن ولاية..."
                   icon="search-outline"
                 />
                 <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false}>
@@ -430,7 +411,7 @@ export default function RegisterScreen() {
                       key={item.id}
                       style={[
                         styles.wRow,
-                        { borderBottomColor: theme.colors.divider },
+                        { borderBottomColor: theme.isDark ? '#334155' : COLORS.border },
                       ]}
                       onPress={() => {
                         setSelectedWilaya(item);
@@ -438,24 +419,11 @@ export default function RegisterScreen() {
                         setWilayaSearch("");
                       }}
                     >
-                      <Text
-                        style={{
-                          color: theme.colors.text,
-                          fontFamily: "Tajawal_700Bold",
-                          fontSize: 16,
-                          textAlign: 'right',
-                          flex: 1
-                        }}
-                      >
+                      <Text style={[styles.wRowText, { color: theme.isDark ? '#FFFFFF' : COLORS.textMain }]}>
                         {item.code} — {item.name}
                       </Text>
                       {selectedWilaya?.id === item.id && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color={theme.primary}
-                          style={{ marginRight: 10 }}
-                        />
+                        <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} style={{ marginLeft: 10 }} />
                       )}
                     </TouchableOpacity>
                   ))}
@@ -471,123 +439,179 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  topGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 250,
-  },
-  safe: { flex: 1 },
+  bgRing1: { position: 'absolute', width: 900, height: 900, borderRadius: 450, borderWidth: 2, top: '-10%', left: '-20%' },
+  bgRing2: { position: 'absolute', width: 700, height: 700, borderRadius: 350, borderWidth: 1, bottom: '20%', right: '-30%' },
+  bgCircle: { position: 'absolute', width: 600, height: 600, borderRadius: 300, bottom: '-5%', right: '-10%' },
+
+  safe: { flex: 1, zIndex: 10 },
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,
-    padding: spacing.lg,
-    paddingTop: spacing.xl,
+    padding: 24,
+    paddingTop: 40,
   },
   scrollWide: {
     alignSelf: "center",
     width: "100%",
-    maxWidth: 480,
+    maxWidth: 500, // Widened for breathing room
   },
   header: {
-    marginBottom: spacing.lg,
+    alignItems: "center",
+    marginBottom: 30,
+  },
+  logoPulse: {
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: COLORS.primaryHover,
+    shadowOpacity: 0.2,
+    shadowRadius: 25,
+    elevation: 15,
   },
   title: {
-    ...typography.h1,
-    marginBottom: spacing.xs,
+    fontFamily: "Tajawal_900Black",
+    fontWeight: "900",
+    fontSize: 36,
+    textAlign: "center",
+    letterSpacing: -0.5,
   },
   subtitle: {
-    ...typography.body,
+    fontFamily: "Tajawal_500Medium",
+    fontSize: 16,
+    textAlign: "center",
+    marginTop: 8,
   },
   roleContainer: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+    gap: 16,
+    marginBottom: 32,
   },
   roleOption: {
-    flexDirection: "row",
+    flexDirection: Platform.OS === 'web' ? 'row' : 'row-reverse', // Fixes double-flip on Expo Web with dir="rtl"
     alignItems: "center",
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    padding: 20,
+    borderRadius: 24, // Matches premium feel
     borderWidth: 1.5,
+    gap: 16,
   },
-  roleIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginEnd: spacing.md,
-  },
-  roleInfo: {
-    flex: 1,
-  },
-  roleLabel: {
-    ...typography.bodyBold,
-    marginBottom: 2,
-  },
-  roleDesc: {
-    ...typography.caption,
+  roleOptionActiveShadow: {
+    shadowColor: COLORS.primaryHover,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 15,
+    elevation: 5,
   },
   radio: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
   },
-  formCard: {
-    borderRadius: borderRadius.xl,
-    borderWidth: 1,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+  roleInfo: {
+    flex: 1,
+    justifyContent: 'center', // Allow stretching horizontally so textAlign right works
   },
-  errorContainer: {
-    backgroundColor: "rgba(255, 107, 107, 0.1)",
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: "rgba(255, 107, 107, 0.2)",
-    padding: spacing.md,
-    marginBottom: spacing.md,
+  roleLabel: {
+    fontFamily: "Tajawal_800ExtraBold",
+    fontSize: 18,
+    marginBottom: 4,
+    textAlign: 'right',
   },
-  errorText: {
-    color: "#FF6B6B",
-    ...typography.caption,
-    textAlign: "center",
+  roleDesc: {
+    fontFamily: "Tajawal_500Medium",
+    fontSize: 14,
+    textAlign: 'right',
   },
-  button: {
-    marginTop: spacing.sm,
-  },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
+  roleIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28, // Perfect circle
     alignItems: "center",
-    paddingBottom: spacing.lg,
+    justifyContent: "center",
   },
-  footerText: { ...typography.body },
-  link: { ...typography.bodyBold },
+  formCard: {
+    borderRadius: 30,
+    borderWidth: 1,
+    padding: 32,
+    marginBottom: 32,
+    shadowColor: COLORS.primaryHover,
+    shadowOpacity: 0.05,
+    shadowRadius: 30,
+    elevation: 5,
+  },
   label: {
-    ...typography.caption,
-    marginBottom: 6,
-    marginTop: spacing.md,
-    fontFamily: "Tajawal_700Bold",
-    textAlign: 'right'
+    fontFamily: "Tajawal_800ExtraBold",
+    fontSize: 16,
+    marginBottom: 10,
+    marginTop: 8,
+    textAlign: 'right', // Force RTL alignment
+    writingDirection: 'rtl',
   },
   picker: {
-    flexDirection: "row-reverse",
+    flexDirection: Platform.OS === 'web' ? 'row' : 'row-reverse',
     alignItems: "center",
-    padding: 14,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    gap: spacing.sm,
-    marginBottom: spacing.md
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    height: 64, // Taller touch target
+    marginBottom: 24,
   },
-  wRow: {
+  pickerText: {
+    fontFamily: 'Tajawal_500Medium',
+    fontSize: 16,
+    flex: 1,
+    textAlign: 'right',
+    marginHorizontal: 12,
+  },
+  errorContainer: {
+    backgroundColor: "rgba(239, 68, 68, 0.08)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.2)",
+    padding: 16,
+    marginBottom: 24,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 4,
+    justifyContent: 'center',
+    gap: 8,
   },
+  errorText: {
+    color: COLORS.danger,
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 14,
+    textAlign: "right",
+    flexShrink: 1,
+  },
+  button: {
+    marginTop: 10,
+  },
+  footer: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'row-reverse',
+    justifyContent: "center",
+    alignItems: "center",
+    paddingBottom: 40,
+    gap: 6,
+  },
+  footerText: {
+    fontFamily: "Tajawal_500Medium",
+    fontSize: 16,
+  },
+  link: {
+    fontFamily: "Tajawal_800ExtraBold",
+    fontSize: 16,
+  },
+  wRow: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'row-reverse',
+    alignItems: 'center',
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    paddingHorizontal: 8,
+  },
+  wRowText: {
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 16,
+    textAlign: 'right',
+    flex: 1,
+  }
 });

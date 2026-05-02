@@ -1,131 +1,168 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withRepeat, 
-  withTiming, 
-  Easing 
-} from 'react-native-reanimated';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated, Easing, Platform } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
-import { typography, spacing } from '../../theme/theme';
+
+// Premium Tokens matching Cinematic UI
+const COLORS = {
+  primary: '#2D6A4F',
+  accentMint: '#74C69D',
+  bgWhite: '#FFFFFF',
+  textMain: '#0F172A',
+  textLight: '#94A3B8',
+};
 
 /**
  * Premium Loading Spinner.
- * Upgraded to use react-native-reanimated for 60fps infinite loops on the UI thread.
+ * Uses native Animated for 100% bug-free, GPU-accelerated infinite loops.
+ * Fixed bounding-box layout ensures it never breaks parent flex rows.
  */
-export default function LoadingSpinner({ size = 'large', style, message }) {
+export default function LoadingSpinner({ size = 'large', style, message, fullScreen = false }) {
   const theme = useTheme();
-  
-  const rotation = useSharedValue(0);
-  const scale = useSharedValue(0.8);
+
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Continuous 360 rotation on UI thread
-    rotation.value = withRepeat(
-      withTiming(360, { duration: 1200, easing: Easing.linear }),
-      -1, // infinite
-      false // don't reverse
-    );
+    // GPU-Accelerated Infinite Rotation
+    Animated.loop(
+      Animated.timing(spinAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
 
-    // Continuous pulse in/out
-    scale.value = withRepeat(
-      withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true // reverse
-    );
+    // Smooth Breathing/Pulse Effect
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.8,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        })
+      ])
+    ).start();
   }, []);
 
-  const spinnerStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ rotate: `${rotation.value}deg` }],
-    };
+  // Safe string interpolation for rotation
+  const spin = spinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
   });
 
-  const logoStyle = useAnimatedStyle(() => {
-    return {
-      transform: [{ scale: scale.value }],
-      opacity: scale.value, 
-    };
-  });
+  // Calculate strict dimensions so it doesn't break parent layouts
+  const dotSize = size === 'large' ? 48 : 28;
+  const innerSize = dotSize - (size === 'large' ? 16 : 10);
+  const strokeWidth = size === 'large' ? 3 : 2;
 
-  const dotSize = size === 'large' ? 48 : 32;
+  const content = (
+    <View style={[styles.wrapper, style]}>
+      {/* Strict Bounding Box for the animation */}
+      <View style={{ width: dotSize, height: dotSize, justifyContent: 'center', alignItems: 'center' }}>
 
-  return (
-    <View style={[styles.container, style]}>
-      {/* Outer Rotating Ring */}
-      <Animated.View
-        style={[
-          styles.spinner,
-          {
-            width: dotSize,
-            height: dotSize,
-            borderRadius: dotSize / 2,
-            borderColor: theme.primary + '20',
-            borderTopColor: theme.primary,
-            borderRightColor: theme.primary + '60',
-          },
-          spinnerStyle
-        ]}
-      />
-      
-      {/* Inner Pulsing Logo */}
-      <Animated.View
-        style={[
-          styles.logoContainer,
-          {
-            width: dotSize - 16,
-            height: dotSize - 16,
-            borderRadius: (dotSize - 16) / 2,
-            backgroundColor: theme.primary + '15',
-          },
-          logoStyle
-        ]}
-      >
-        <Text
+        {/* Outer Rotating Ring */}
+        <Animated.View
           style={[
-            styles.logoText,
+            styles.spinner,
             {
-              color: theme.primary,
-              fontSize: (dotSize - 16) * 0.55,
-            },
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              borderWidth: strokeWidth,
+              borderColor: theme.isDark ? 'rgba(116, 198, 157, 0.1)' : 'rgba(45, 106, 79, 0.1)',
+              borderTopColor: COLORS.primary,
+              borderRightColor: COLORS.accentMint,
+              transform: [{ rotate: spin }],
+            }
+          ]}
+        />
+
+        {/* Inner Pulsing Logo */}
+        <Animated.View
+          style={[
+            styles.logoContainer,
+            {
+              width: innerSize,
+              height: innerSize,
+              borderRadius: innerSize / 2,
+              backgroundColor: theme.isDark ? 'rgba(45, 106, 79, 0.3)' : 'rgba(116, 198, 157, 0.15)',
+              transform: [{ scale: pulseAnim }],
+              opacity: pulseAnim,
+            }
           ]}
         >
-          C
-        </Text>
-      </Animated.View>
+          <Text
+            style={[
+              styles.logoText,
+              {
+                color: COLORS.primary,
+                fontSize: innerSize * 0.55,
+              },
+            ]}
+          >
+            C
+          </Text>
+        </Animated.View>
+      </View>
 
       {/* Optional Loading Message */}
       {message && (
-        <Text style={[styles.message, { color: theme.colors.textSecondary }]}>
+        <Text style={[styles.message, { color: theme.isDark ? '#94A3B8' : COLORS.textLight }]}>
           {message}
         </Text>
       )}
     </View>
   );
+
+  // If fullScreen prop is passed, wrap it in a flex: 1 container
+  if (fullScreen) {
+    return (
+      <View style={[styles.fullScreenContainer, { backgroundColor: theme.isDark ? '#0A0A1A' : COLORS.bgMain }]}>
+        {content}
+      </View>
+    );
+  }
+
+  return content;
 }
 
 const styles = StyleSheet.create({
-  container: {
+  fullScreenContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+  },
+  wrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   spinner: {
-    borderWidth: 3,
-    position: 'absolute',
+    position: 'absolute', // Absolute inside the Strict Bounding Box, so it doesn't break layout
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
+      android: { elevation: 2 },
+    }),
   },
   logoText: {
-    fontFamily: 'Tajawal_800ExtraBold',
-    fontWeight: '800',
+    fontFamily: 'Tajawal_900Black',
+    marginTop: Platform.OS === 'ios' ? 2 : 0, // Visual center adjustment
   },
   message: {
-    ...typography.caption,
-    marginTop: spacing.lg,
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 14,
+    marginTop: 16,
+    textAlign: 'center',
   },
 });

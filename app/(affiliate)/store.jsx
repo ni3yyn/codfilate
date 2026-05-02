@@ -14,7 +14,8 @@ import {
   Modal,
   I18nManager,
   ActivityIndicator,
-  Easing
+  Easing,
+  Animated as RNAnimated
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,11 +26,11 @@ import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming, 
-  withRepeat, 
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
   withSequence,
   Easing as ReanimatedEasing,
   interpolate,
@@ -54,7 +55,6 @@ import { typography, spacing, borderRadius } from '../../src/theme/theme';
 import { formatCurrency, generateReferralLink, generateCampaignLink } from '../../src/lib/utils';
 
 const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/400x400.png?text=لا+توجد+صورة';
-
 
 // ──── Sort options ────
 const SORT_OPTIONS = [
@@ -113,6 +113,100 @@ const ModernShimmer = ({ visible = true }) => {
   );
 };
 
+// ──── Smart Marquee Text for Product Cards ────
+const CardMarqueeText = React.memo(({ text, style }) => {
+  const [containerWidth, setContainerWidth] = React.useState(0);
+  const [textWidth, setTextWidth] = React.useState(0);
+  const translateX = React.useRef(new RNAnimated.Value(0)).current;
+  const animRef = React.useRef(null);
+
+  const GAP = 40;
+
+  React.useEffect(() => {
+    if (textWidth > containerWidth && containerWidth > 0) {
+      const distance = textWidth + GAP;
+      const duration = (distance / 30) * 1000;
+
+      const startAnimation = () => {
+        translateX.setValue(0);
+        animRef.current = RNAnimated.timing(translateX, {
+          toValue: distance,
+          duration: duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        });
+        animRef.current.start(({ finished }) => {
+          if (finished) {
+            startAnimation();
+          }
+        });
+      };
+
+      startAnimation();
+
+      return () => {
+        if (animRef.current) {
+          animRef.current.stop();
+        }
+        translateX.setValue(0);
+      };
+    } else {
+      translateX.setValue(0);
+    }
+  }, [textWidth, containerWidth, text]);
+
+  const handleContainerLayout = React.useCallback((e) => {
+    const w = Math.round(e.nativeEvent.layout.width);
+    if (Math.abs(w - containerWidth) > 1) {
+      setContainerWidth(w);
+    }
+  }, [containerWidth]);
+
+  const handleTextLayout = React.useCallback((e) => {
+    const w = Math.round(e.nativeEvent.layout.width);
+    if (Math.abs(w - textWidth) > 1) {
+      setTextWidth(w);
+    }
+  }, [textWidth]);
+
+  const isOverflowing = textWidth > containerWidth && containerWidth > 0;
+
+  return (
+    <View
+      style={{ width: '100%', overflow: 'hidden', flexDirection: 'row-reverse', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 10, height: 28, position: 'relative' }}
+      onLayout={handleContainerLayout}
+    >
+      <RNAnimated.View style={{
+        position: 'absolute',
+        right: 0,
+        flexDirection: 'row-reverse',
+        alignItems: 'center',
+        transform: [{ translateX }]
+      }}>
+        <Text
+          onLayout={handleTextLayout}
+          style={[style, { marginBottom: 0 }, Platform.OS === 'web' && { whiteSpace: 'nowrap' }]}
+          numberOfLines={1}
+        >
+          {text}
+        </Text>
+
+        {isOverflowing && (
+          <>
+            <View style={{ width: GAP }} />
+            <Text
+              style={[style, { marginBottom: 0 }, Platform.OS === 'web' && { whiteSpace: 'nowrap' }]}
+              numberOfLines={1}
+            >
+              {text}
+            </Text>
+          </>
+        )}
+      </RNAnimated.View>
+    </View>
+  );
+});
+
 export default function StoreScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -165,8 +259,10 @@ export default function StoreScreen() {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  // Interactive Copy State
+  // Interactive UI States
   const [isCopied, setIsCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState(null); // 'title' | 'desc'
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Gallery Logic
   const galleryImages = useMemo(() => {
@@ -220,8 +316,6 @@ export default function StoreScreen() {
     }
   }, [affiliateProfile?.id, products, fetchActiveCampaignsByProducts]);
 
-
-
   // Web Browser Back Button Handler
   useEffect(() => {
     if (Platform.OS !== 'web' || !sheetVisible || typeof window === 'undefined') return;
@@ -253,8 +347,6 @@ export default function StoreScreen() {
     };
   }, [searchQuery]);
 
-
-
   const campaignByProductId = useMemo(() => {
     const m = {};
     (campaigns || []).forEach((c) => {
@@ -274,7 +366,7 @@ export default function StoreScreen() {
       Haptics.selectionAsync().catch(() => { });
     }
     setFilterCategory(catId);
-    setFilterSubcategory(null); // Reset subcategory when category changes
+    setFilterSubcategory(null);
   }, []);
 
   const handleSubcategorySelect = useCallback((subId) => {
@@ -284,14 +376,12 @@ export default function StoreScreen() {
     setFilterSubcategory(subId);
   }, []);
 
-  // ──── Derived: subcategories for selected category ────
   const activeSubcategories = useMemo(() => {
     if (!filterCategory) return [];
     const cat = categories.find((c) => c.id === filterCategory);
     return cat?.subcategories || [];
   }, [filterCategory, categories]);
 
-  // ──── Derived: product count per category ────
   const productCountByCategory = useMemo(() => {
     const counts = {};
     products.forEach((p) => {
@@ -302,12 +392,10 @@ export default function StoreScreen() {
     return counts;
   }, [products]);
 
-  // ──── Derived: only categories that have products ────
   const visibleCategories = useMemo(() => {
     return categories.filter((cat) => productCountByCategory[cat.id] > 0);
   }, [categories, productCountByCategory]);
 
-  // ──── Active filter count ────
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filterCategory) count++;
@@ -334,7 +422,6 @@ export default function StoreScreen() {
     if (Platform.OS !== 'web') {
       Haptics.selectionAsync().catch(() => { });
     }
-    // Toggle: if same preset is active, clear it
     if (priceMin === String(preset.min) && (preset.max === null ? priceMax === '' : priceMax === String(preset.max))) {
       setPriceMin('');
       setPriceMax('');
@@ -350,7 +437,6 @@ export default function StoreScreen() {
       return { link: generateCampaignLink(camp.slug), priceLabel: camp.sale_price };
     }
     return {
-      // Fallback to 'GUEST' if affiliateProfile isn't fully loaded yet to prevent silent errors
       link: generateReferralLink(affiliateProfile?.referral_code || 'GUEST', product.id),
       priceLabel: product.price,
     };
@@ -371,25 +457,69 @@ export default function StoreScreen() {
     }
   };
 
-  const handleCopy = async (product) => {
+  // ──── New Click-to-Copy Function ────
+  const handleCopyText = async (text, field) => {
+    if (!text) return;
     try {
-      const { link, priceLabel } = resolveShareLink(product);
-
-      const promoText = `🔥 متوفر الآن: ${product.name}\n\n💰 السعر: ${formatCurrency(priceLabel)}\n\n✨ التوصيل متوفر والدفع عند الاستلام!\n🛒 للطلب عبر الرابط:\n${link}`;
-
-      // Await clipboard to ensure it completes before UI update
-      await Clipboard.setStringAsync(promoText);
-
-      // Update UI state securely
-      setIsCopied(true);
-
-      // Safe Haptics execution (won't crash if unsupported)
+      await Clipboard.setStringAsync(text);
+      setCopiedField(field);
       if (Platform.OS !== 'web') {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
       }
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (error) {
+      console.warn("Text copy failed:", error);
+    }
+  };
 
+  // ──── New Download Images Function ────
+  const handleDownloadAllImages = async (images) => {
+    if (!images || images.length === 0) return;
+    setIsDownloading(true);
+    try {
+      if (Platform.OS === 'web') {
+        // Sequentially download images to PC
+        for (let i = 0; i < images.length; i++) {
+          const response = await fetch(images[i]);
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `product-image-${i + 1}.jpg`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } else {
+        // Native OS: Save first image to cache and share it (Fallback since no MediaLibrary permissions are guaranteed)
+        const fileUri = `${FileSystem.documentDirectory}product_image_${Date.now()}.jpg`;
+        const { uri } = await FileSystem.downloadAsync(images[0], fileUri);
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(uri, { dialogTitle: 'حفظ الصورة' });
+        }
+      }
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+      }
+    } catch (e) {
+      console.warn('Download error:', e);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleCopy = async (product) => {
+    try {
+      const { link, priceLabel } = resolveShareLink(product);
+      const promoText = `🔥 متوفر الآن: ${product.name}\n\n💰 السعر: ${formatCurrency(priceLabel)}\n\n✨ التوصيل متوفر والدفع عند الاستلام!\n🛒 للطلب عبر الرابط:\n${link}`;
+      await Clipboard.setStringAsync(promoText);
+      setIsCopied(true);
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => { });
+      }
       setTimeout(() => setIsCopied(false), 2000);
-
     } catch (error) {
       console.warn("Copy to clipboard failed:", error);
     }
@@ -400,12 +530,10 @@ export default function StoreScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
     }
     closeModal();
-
     setTimeout(() => {
       const camp = campaignByProductId[product.id];
       const base = `productId=${product.id}&productName=${encodeURIComponent(product.name)}&productPrice=${product.price}&merchantCommission=${product.commission_amount || 0}&storeId=${product.store_id}`;
       const q = camp?.id ? `${base}&campaignId=${camp.id}&salePrice=${camp.sale_price}` : base;
-
       router.push(`/submit-order?${q}`);
     }, 150);
   };
@@ -416,6 +544,7 @@ export default function StoreScreen() {
     }
     setSelectedProduct(product);
     setIsCopied(false);
+    setCopiedField(null);
     setSheetVisible(true);
   };
 
@@ -432,21 +561,10 @@ export default function StoreScreen() {
     }
   };
 
-  // ──── Advanced filtering + sorting pipeline ────
   const displayProducts = useMemo(() => {
     let result = products;
-
-    // 1. Category filter
-    if (filterCategory) {
-      result = result.filter((p) => p.category_id === filterCategory);
-    }
-
-    // 2. Subcategory filter
-    if (filterSubcategory) {
-      result = result.filter((p) => p.subcategory_id === filterSubcategory);
-    }
-
-    // 3. Debounced search — name, description, and category name
+    if (filterCategory) result = result.filter((p) => p.category_id === filterCategory);
+    if (filterSubcategory) result = result.filter((p) => p.subcategory_id === filterSubcategory);
     if (debouncedSearch) {
       const q = debouncedSearch.toLowerCase();
       result = result.filter(p =>
@@ -455,38 +573,20 @@ export default function StoreScreen() {
         (p.category?.name && p.category.name.toLowerCase().includes(q))
       );
     }
-
-    // 4. Price range filter
     const minVal = priceMin ? parseFloat(priceMin) : null;
     const maxVal = priceMax ? parseFloat(priceMax) : null;
-    if (minVal !== null) {
-      result = result.filter((p) => p.price >= minVal);
-    }
-    if (maxVal !== null) {
-      result = result.filter((p) => p.price <= maxVal);
-    }
+    if (minVal !== null) result = result.filter((p) => p.price >= minVal);
+    if (maxVal !== null) result = result.filter((p) => p.price <= maxVal);
 
-    // 5. Sorting
     const sorted = [...result];
     switch (sortBy) {
-      case 'cheapest':
-        sorted.sort((a, b) => a.price - b.price);
-        break;
-      case 'expensive':
-        sorted.sort((a, b) => b.price - a.price);
-        break;
-      case 'name':
-        sorted.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-        break;
-      case 'newest':
-      default:
-        // Already sorted by created_at desc from the API
-        break;
+      case 'cheapest': sorted.sort((a, b) => a.price - b.price); break;
+      case 'expensive': sorted.sort((a, b) => b.price - a.price); break;
+      case 'name': sorted.sort((a, b) => a.name.localeCompare(b.name, 'ar')); break;
+      case 'newest': default: break;
     }
-
     return sorted;
   }, [products, filterCategory, filterSubcategory, debouncedSearch, priceMin, priceMax, sortBy]);
-
 
 
   // --- RENDER WEB OVERLAY (FADE ONLY, NO SLIDE) ---
@@ -508,22 +608,28 @@ export default function StoreScreen() {
 
             <View style={styles.webModalContentArea}>
               <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }}>
-                <View style={styles.sheetTitleRow}>
+
+                {/* ──── Clickable Title Row ──── */}
+                <TouchableOpacity
+                  style={[styles.sheetTitleRow, { alignItems: 'center' }]}
+                  onPress={() => handleCopyText(selectedProduct.name, 'title')}
+                  activeOpacity={0.7}
+                >
                   <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>
                     {selectedProduct.name}
                   </Text>
+                  <Ionicons name={copiedField === 'title' ? "checkmark" : "copy-outline"} size={18} color={copiedField === 'title' ? "#10B981" : theme.colors.textTertiary} style={{ marginStart: 8 }} />
                   {!!campaignByProductId[selectedProduct.id] && (
                     <View style={[styles.sheetCampaignBadge, { borderRadius: borderRadius.full }]}>
                       <Ionicons name="flash" size={12} color="#FFF" />
                       <Text style={styles.sheetCampaignText}>عرض نشط</Text>
                     </View>
                   )}
-                </View>
+                </TouchableOpacity>
 
                 <View style={[styles.sheetPriceCard, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.lg }]}>
                   <View style={styles.sheetPriceRow}>
-                    <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>سعر الجملة:</Text>
-                    <Text style={[styles.sheetPriceValue, { color: theme.colors.text }]}>
+                    <Text style={[styles.sheetPriceValue, { color: theme.colors.text, fontSize: 24 }]}>
                       {formatCurrency(selectedProduct.price)}
                     </Text>
                   </View>
@@ -540,26 +646,50 @@ export default function StoreScreen() {
                   </View>
                 </View>
 
+                {/* ──── Clickable Description Section ──── */}
                 {!!selectedProduct.description && (
                   <View style={styles.descSection}>
-                    <Text style={[styles.descTitle, { color: theme.colors.text }]}>وصف المنتج:</Text>
-                    <Text style={[styles.descText, { color: theme.colors.textSecondary }]}>
-                      {selectedProduct.description}
-                    </Text>
+                    <View style={styles.descSectionHeader}>
+                      <Text style={[styles.descTitle, { color: theme.colors.text, marginBottom: 0 }]}>وصف المنتج:</Text>
+                      <TouchableOpacity onPress={() => handleCopyText(selectedProduct.description, 'desc')} style={styles.copySmallBtn}>
+                        <Ionicons name={copiedField === 'desc' ? "checkmark" : "copy-outline"} size={14} color={copiedField === 'desc' ? "#10B981" : theme.colors.textTertiary} />
+                        <Text style={[styles.copySmallText, { color: copiedField === 'desc' ? "#10B981" : theme.colors.textTertiary }]}>{copiedField === 'desc' ? 'تم النسخ' : 'نسخ الوصف'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleCopyText(selectedProduct.description, 'desc')}>
+                      <Text style={[styles.descText, { color: theme.colors.textSecondary }]}>
+                        {selectedProduct.description}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </ScrollView>
 
               <View style={[styles.webModalFooter, { borderTopColor: theme.colors.border }]}>
-                {/* ACTION BUTTONS (Inlined for React Native Stability) */}
+
+                {/* Download Images Button */}
+                <TouchableOpacity
+                  onPress={() => handleDownloadAllImages(galleryImages)}
+                  hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+                  style={[styles.sheetIconBtn, { backgroundColor: isDownloading ? '#F59E0B' : theme.colors.surface2, borderRadius: borderRadius.lg }]}
+                >
+                  {isDownloading ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Ionicons name="download-outline" size={22} color={theme.colors.text} />
+                  )}
+                </TouchableOpacity>
+
+                {/* Copy Link Button */}
                 <TouchableOpacity
                   onPress={() => handleCopy(selectedProduct)}
                   hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
-                  style={[styles.sheetIconBtn, { backgroundColor: isCopied ? '#00B894' : theme.colors.surface2, borderRadius: borderRadius.lg }]}
+                  style={[styles.sheetIconBtn, { backgroundColor: isCopied ? '#10B981' : theme.colors.surface2, borderRadius: borderRadius.lg }]}
                 >
                   <Ionicons name={isCopied ? "checkmark-outline" : "copy-outline"} size={22} color={isCopied ? '#FFF' : theme.colors.text} />
                 </TouchableOpacity>
 
+                {/* Share Button */}
                 <TouchableOpacity
                   onPress={() => handleShare(selectedProduct)}
                   hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
@@ -610,25 +740,29 @@ export default function StoreScreen() {
                 images={galleryImages}
                 height={280}
                 borderRadius={5}
-                // يفضل إخفاء الأسهم في الهاتف والاعتماد على السحب (Swipe)، يمكنك إزالة هذا السطر إذا أردت إبقاءها
                 showArrows={Platform.OS === 'web'}
               />
             </View>
 
-            <View style={styles.sheetTitleRow}>
+            {/* ──── Clickable Title Row ──── */}
+            <TouchableOpacity
+              style={[styles.sheetTitleRow, { alignItems: 'center' }]}
+              onPress={() => handleCopyText(selectedProduct.name, 'title')}
+              activeOpacity={0.7}
+            >
               <Text style={[styles.sheetTitle, { color: theme.colors.text }]}>{selectedProduct.name}</Text>
+              <Ionicons name={copiedField === 'title' ? "checkmark" : "copy-outline"} size={18} color={copiedField === 'title' ? "#10B981" : theme.colors.textTertiary} style={{ marginStart: 8 }} />
               {!!campaignByProductId[selectedProduct.id] && (
                 <View style={[styles.sheetCampaignBadge, { borderRadius: borderRadius.full }]}>
                   <Ionicons name="flash" size={12} color="#FFF" />
                   <Text style={styles.sheetCampaignText}>عرض نشط</Text>
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
 
             <View style={[styles.sheetPriceCard, { backgroundColor: theme.colors.surface2, borderRadius: borderRadius.lg }]}>
               <View style={styles.sheetPriceRow}>
-                <Text style={[styles.sheetPriceLabel, { color: theme.colors.textSecondary }]}>سعر الجملة:</Text>
-                <Text style={[styles.sheetPriceValue, { color: theme.colors.text, fontSize: 20 }]}>
+                <Text style={[styles.sheetPriceValue, { color: theme.colors.text, fontSize: 24 }]}>
                   {formatCurrency(selectedProduct.price)}
                 </Text>
               </View>
@@ -645,12 +779,21 @@ export default function StoreScreen() {
               </View>
             </View>
 
+            {/* ──── Clickable Description Section ──── */}
             {!!selectedProduct.description && (
               <View style={styles.descSection}>
-                <Text style={[styles.descTitle, { color: theme.colors.text }]}>وصف المنتج:</Text>
-                <Text style={[styles.descText, { color: theme.colors.textSecondary }]}>
-                  {selectedProduct.description}
-                </Text>
+                <View style={styles.descSectionHeader}>
+                  <Text style={[styles.descTitle, { color: theme.colors.text, marginBottom: 0 }]}>وصف المنتج:</Text>
+                  <TouchableOpacity onPress={() => handleCopyText(selectedProduct.description, 'desc')} style={styles.copySmallBtn}>
+                    <Ionicons name={copiedField === 'desc' ? "checkmark" : "copy-outline"} size={14} color={copiedField === 'desc' ? "#10B981" : theme.colors.textTertiary} />
+                    <Text style={[styles.copySmallText, { color: copiedField === 'desc' ? "#10B981" : theme.colors.textTertiary }]}>{copiedField === 'desc' ? 'تم النسخ' : 'نسخ الوصف'}</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => handleCopyText(selectedProduct.description, 'desc')}>
+                  <Text style={[styles.descText, { color: theme.colors.textSecondary }]}>
+                    {selectedProduct.description}
+                  </Text>
+                </TouchableOpacity>
               </View>
             )}
             <View style={{ height: 20 }} />
@@ -659,7 +802,21 @@ export default function StoreScreen() {
           <View style={[styles.sheetFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
             <View style={styles.sheetFooterInner}>
 
-              {/* ACTION BUTTONS (Inlined for React Native Stability) */}
+              {/* Download Images Button */}
+              <TouchableOpacity
+                onPress={() => handleDownloadAllImages(galleryImages)}
+                activeOpacity={0.7}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={[styles.sheetIconBtn, { backgroundColor: isDownloading ? '#F59E0B' : theme.colors.surface2, borderRadius: borderRadius.full }]}
+              >
+                {isDownloading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Ionicons name="download-outline" size={22} color={theme.colors.text} />
+                )}
+              </TouchableOpacity>
+
+              {/* Copy Promo Link Button */}
               <TouchableOpacity
                 onPress={() => handleCopy(selectedProduct)}
                 activeOpacity={0.7}
@@ -669,6 +826,7 @@ export default function StoreScreen() {
                 <Ionicons name={isCopied ? "checkmark-outline" : "copy-outline"} size={22} color={isCopied ? '#FFF' : theme.colors.text} />
               </TouchableOpacity>
 
+              {/* Share Button */}
               <TouchableOpacity
                 onPress={() => handleShare(selectedProduct)}
                 activeOpacity={0.7}
@@ -696,6 +854,19 @@ export default function StoreScreen() {
     const hasCampaign = !!campaignByProductId[item.id];
     const commission = item.commission_amount || 0;
 
+    const catName = (() => {
+      const targetId = item.category_id || item.category;
+      const cat = categories.find(c =>
+        c.id === targetId ||
+        c.name_normalized === String(targetId).toLowerCase() ||
+        c.name_ar === targetId
+      );
+      if (cat) return cat.name_ar || cat.name;
+
+      if (typeof item.category === 'object') return item.category.name_ar || item.category.name;
+      return item.category || 'بدون تصنيف';
+    })();
+
     return (
       <TouchableOpacity
         style={[
@@ -717,7 +888,6 @@ export default function StoreScreen() {
             transition={400}
           />
 
-          {/* Commission Badge with better design */}
           <View style={styles.cardCommissionBadgeContainer}>
             <LinearGradient
               colors={['#10B981', '#059669']}
@@ -740,22 +910,27 @@ export default function StoreScreen() {
         </View>
 
         <View style={styles.gridContent}>
-          <Text style={[styles.gridTitle, { color: theme.colors.text }]} numberOfLines={2}>
-            {item.name}
+          <Text style={[styles.categoryText, { color: theme.primary }]} numberOfLines={1}>
+            {catName}
           </Text>
+
+          <CardMarqueeText
+            text={item.name}
+            style={[styles.gridTitle, { color: theme.colors.text }]}
+          />
 
           <View style={styles.cardDivider} />
 
           <View style={styles.gridPriceRow}>
-            <View style={{ alignItems: 'flex-end' }}>
+            <View style={[styles.arrowCircle, { backgroundColor: theme.primary + '10' }]}>
+              <Ionicons name="chevron-back" size={16} color={theme.primary} />
+            </View>
+
+            <View style={{ alignItems: 'flex-start' }}>
               <Text style={[styles.gridPriceLabel, { color: theme.colors.textTertiary }]}>سعر البيع</Text>
               <Text style={[styles.gridPrice, { color: theme.colors.text }]}>
                 {formatCurrency(item.price)}
               </Text>
-            </View>
-
-            <View style={[styles.arrowCircle, { backgroundColor: theme.primary + '10' }]}>
-              <Ionicons name="chevron-forward" size={16} color={theme.primary} />
             </View>
           </View>
         </View>
@@ -763,7 +938,6 @@ export default function StoreScreen() {
     );
   };
 
-  // ──── Empty state message ────
   const emptyMessage = useMemo(() => {
     if (debouncedSearch) return 'لم نعثر على أي منتج يطابق بحثك.';
     if (priceMin || priceMax) return 'لا توجد منتجات في هذا النطاق السعري.';
@@ -772,24 +946,12 @@ export default function StoreScreen() {
     return 'لا توجد منتجات متاحة في المتجر حالياً.';
   }, [debouncedSearch, priceMin, priceMax, filterSubcategory, filterCategory]);
 
-
-
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.colors.background }]} edges={['top']}>
 
       <UniversalHeader
         title="سوق المنتجات"
         subtitle="تصفح المنتجات وابدأ التسويق الآن"
-        rightAction={
-          <TouchableOpacity
-            onPress={() => router.push('/(affiliate)/campaigns')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={[styles.campaignBtn, { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 9999 }]}
-          >
-            <Ionicons name="flash" size={14} color="#FFFFFF" />
-            <Text style={[styles.campaignBtnText, { color: '#FFFFFF' }]}>الحملات</Text>
-          </TouchableOpacity>
-        }
       />
 
       <View style={styles.centerWrapper}>
@@ -1048,18 +1210,18 @@ const styles = StyleSheet.create({
 
   topControls: { zIndex: 10, paddingVertical: spacing.sm },
   searchRow: { flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.md, marginBottom: spacing.sm, gap: 8 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', height: 48, borderWidth: 1, paddingHorizontal: 14, gap: 8 },
-  searchInput: { flex: 1, height: '100%', textAlign: 'right', fontFamily: 'Tajawal_500Medium', fontSize: 15 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', height: 52, borderWidth: 1, paddingHorizontal: 14, gap: 8 },
+  searchInput: { flex: 1, height: '100%', textAlign: 'right', fontFamily: 'Tajawal_500Medium', fontSize: 15, paddingVertical: 8 },
   filterToggleBtn: { width: 48, height: 48, borderWidth: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   filterBadge: { position: 'absolute', top: -4, right: -4, backgroundColor: '#FF6B6B', width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
   filterBadgeText: { color: '#FFF', fontSize: 10, fontFamily: 'Tajawal_700Bold' },
 
-  filterWrapper: { height: 32 },
+  filterWrapper: { minHeight: 36 },
   filterRow: { paddingHorizontal: spacing.md, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  filterChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 32, borderWidth: 1, borderRadius: 16 },
-  filterChipText: { fontSize: 13, fontFamily: 'Tajawal_500Medium' },
-  filterChipCount: { fontSize: 11, fontFamily: 'Tajawal_400Regular' },
-  subFilterChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, height: 28, borderWidth: 1, borderRadius: 14 },
+  filterChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, borderWidth: 1, borderRadius: 18 },
+  filterChipText: { fontSize: 13, fontFamily: 'Tajawal_500Medium', lineHeight: 18, paddingBottom: 2 },
+  filterChipCount: { fontSize: 11, fontFamily: 'Tajawal_400Regular', lineHeight: 16, paddingBottom: 2 },
+  subFilterChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, minHeight: 32, borderWidth: 1, borderRadius: 16 },
 
   // Advanced Filters Panel
   advancedFiltersPanel: { overflow: 'hidden', marginHorizontal: spacing.md, marginTop: spacing.xs },
@@ -1150,12 +1312,20 @@ const styles = StyleSheet.create({
     padding: 10,
     paddingTop: 8,
   },
+  categoryText: {
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 12,
+    marginBottom: 4,
+    textAlign: 'right',
+    lineHeight: 18,
+    paddingBottom: 2,
+  },
   gridTitle: {
     ...typography.bodyBold,
     fontSize: 14,
     textAlign: 'right',
-    lineHeight: 18,
-    height: 36,
+    lineHeight: 22,
+    paddingBottom: 4,
     marginBottom: 6,
   },
   cardDivider: {
@@ -1173,10 +1343,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Tajawal_500Medium',
     textAlign: 'right',
     marginBottom: 0,
+    lineHeight: 16,
+    paddingBottom: 2,
   },
   gridPrice: {
     fontFamily: 'Tajawal_800ExtraBold',
-    fontSize: 16
+    fontSize: 16,
+    lineHeight: 24,
+    paddingBottom: 2,
   },
   arrowCircle: {
     width: 28,
@@ -1224,11 +1398,12 @@ const styles = StyleSheet.create({
   sheetFooter: { padding: spacing.md, paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md, borderTopWidth: 1, backgroundColor: 'transparent' },
   sheetFooterInner: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
 
-  // --- SHARED STYLES ---
-  sheetTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-  sheetTitle: { ...typography.h3, textAlign: 'right', flex: 1, lineHeight: 28 },
+  // --- SHARED STYLES (With new click-to-copy elements) ---
+  sheetTitleRow: { flexDirection: 'row-reverse', justifyContent: 'flex-start', alignItems: 'center', paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
+  sheetTitle: { ...typography.h3, textAlign: 'right', flexShrink: 1, lineHeight: 28 },
   sheetCampaignBadge: { backgroundColor: '#8B5CF6', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 4, gap: 4, marginStart: 12 },
   sheetCampaignText: { color: '#FFF', fontSize: 10, fontFamily: 'Tajawal_700Bold' },
+
   sheetPriceCard: {
     padding: spacing.md,
     marginHorizontal: spacing.lg,
@@ -1236,16 +1411,12 @@ const styles = StyleSheet.create({
   },
   sheetPriceRow: {
     flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-  },
-  sheetPriceLabel: {
-    fontFamily: 'Tajawal_500Medium',
-    fontSize: 14,
   },
   sheetPriceValue: {
     fontFamily: 'Tajawal_800ExtraBold',
-    fontSize: 18,
+    fontSize: 24,
   },
 
   commissionHighlightCard: {
@@ -1274,11 +1445,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginTop: spacing.xs,
   },
+  descSectionHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
   descTitle: {
     fontFamily: 'Tajawal_700Bold',
     fontSize: 15,
-    marginBottom: 8,
     textAlign: 'right',
+  },
+  copySmallBtn: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+  },
+  copySmallText: {
+    fontSize: 11,
+    fontFamily: 'Tajawal_500Medium',
   },
   descText: {
     fontFamily: 'Tajawal_500Medium',

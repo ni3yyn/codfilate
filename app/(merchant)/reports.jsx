@@ -38,7 +38,7 @@ const WilayaCard = React.memo(({ item, theme, isWide }) => (
         {item.wilaya_name || `ولاية ${item.wilaya_id}`}
       </Text>
     </View>
-    
+
     {/* Refined Stats Grid */}
     <View style={[styles.metricsRow, { borderTopColor: theme.colors.borderLight }]}>
       <View style={styles.metricItem}>
@@ -47,9 +47,9 @@ const WilayaCard = React.memo(({ item, theme, isWide }) => (
           {formatCurrency(item.revenue)}
         </Text>
       </View>
-      
+
       <View style={[styles.metricDivider, { backgroundColor: theme.colors.borderLight }]} />
-      
+
       <View style={styles.metricItem}>
         <Text style={[styles.metricLabel, { color: theme.colors.textTertiary }]}>الطلبات</Text>
         <Text style={[styles.metricValue, { color: theme.colors.text }]}>
@@ -132,9 +132,9 @@ export default function MerchantReportsScreen() {
             {/* Top Summary Dashboard */}
             {rows.length > 0 && (
               <View style={[styles.summaryContainer, isWide && styles.summaryContainerWide]}>
-                <Card 
-                  gradient 
-                  gradientColors={gradients.primary} 
+                <Card
+                  gradient
+                  gradientColors={gradients.primary}
                   style={[styles.summaryCard, isWide && { flex: 1 }]}
                 >
                   <View style={styles.summaryContent}>
@@ -148,7 +148,7 @@ export default function MerchantReportsScreen() {
                   </View>
                 </Card>
 
-                <Card 
+                <Card
                   gradient
                   gradientColors={gradients.dark}
                   style={[styles.summaryCard, isWide && { flex: 1 }]}
@@ -166,14 +166,7 @@ export default function MerchantReportsScreen() {
               </View>
             )}
 
-            <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>تفاصيل الأداء حسب الولاية</Text>
-              {rows.length > 0 && (
-                <View style={[styles.countBadge, { backgroundColor: theme.colors.surface2 }]}>
-                  <Text style={[styles.countBadgeText, { color: theme.colors.textSecondary }]}>{rows.length} ولاية</Text>
-                </View>
-              )}
-            </View>
+
 
             {/* Wilayas Grid / List */}
             {rows.length === 0 ? (

@@ -3,17 +3,18 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Platform, Share, ScrollView, LayoutAnimation, Modal, TextInput, useWindowDimensions
 } from "react-native";
-import Animated, { 
+import Animated, {
   useSharedValue,
-  useAnimatedStyle, 
-  withTiming, 
-  withRepeat, 
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
   Easing as ReanimatedEasing,
   interpolate,
   FadeInDown
 } from 'react-native-reanimated';
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
+import * as Clipboard from 'expo-clipboard';
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -123,6 +124,20 @@ export default function AffiliateCampaignsScreen() {
   const { campaigns, isLoading, fetchCampaignsForAffiliate, createCampaign, updateCampaign, deleteCampaign, setCampaignActive } = useCampaignStore();
   const { showConfirm, showAlert } = useAlertStore();
 
+  const handleShare = async (link, message) => {
+    if (Platform.OS === 'web') {
+      try {
+        await Clipboard.setStringAsync(link);
+        showAlert({ title: "تم النسخ", message: "تم نسخ الرابط بنجاح إلى الحافظة", type: "success" });
+      } catch (err) {
+        console.error("Copy error:", err);
+        showAlert({ title: "خطأ", message: "فشل نسخ الرابط، يرجى المحاولة يدوياً", type: "error" });
+      }
+    } else {
+      Share.share({ message: message || link, url: link });
+    }
+  };
+
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingCampaignId, setEditingCampaignId] = useState(null);
@@ -188,7 +203,7 @@ export default function AffiliateCampaignsScreen() {
   const selectedProduct = publishedProducts.find((p) => p.id === productId);
   const basePrice = selectedProduct ? Number(selectedProduct.price) : 0;
   const merchantCommission = selectedProduct ? Number(selectedProduct.commission_amount || 0) : 0;
-  
+
   const salePriceNum = useMemo(() => {
     // Product price IS the sale price — commission is cut from it
     return basePrice;
@@ -289,7 +304,7 @@ export default function AffiliateCampaignsScreen() {
       let res = editingCampaignId
         ? await updateCampaign(editingCampaignId, { productId, slug, page_config: finalPageConfig })
         : await createCampaign({ affiliateId: affiliateProfile?.id, productId, slug, page_config: finalPageConfig });
-      
+
       setSaving(false);
 
       if (res.success) {
@@ -300,7 +315,7 @@ export default function AffiliateCampaignsScreen() {
           title: editingCampaignId ? "تم تحديث الصفحة" : "تم بناء الصفحة بنجاح",
           message: `تم التحديث بنجاح\n${link}`,
           confirmText: "مشاركة الصفحة", cancelText: "إغلاق", type: "success",
-          onConfirm: () => Share.share({ message: link, url: link }),
+          onConfirm: () => handleShare(link, link),
         });
       } else {
         setModalError(res.error);
@@ -435,11 +450,11 @@ export default function AffiliateCampaignsScreen() {
 
           if (isDesktop) {
             return (
-              <Animated.View 
+              <Animated.View
                 entering={FadeInDown.delay(index * 100).duration(400)}
                 style={[
-                  styles.desktopCampaignRow, 
-                  { 
+                  styles.desktopCampaignRow,
+                  {
                     borderColor: item.is_active ? theme.primary + '40' : theme.colors.border,
                     shadowOpacity: item.is_active ? 0.15 : 0.05,
                   }
@@ -450,7 +465,7 @@ export default function AffiliateCampaignsScreen() {
                   start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFillObject}
                 />
-                
+
                 {/* Left: Product Info */}
                 <View style={styles.desktopProductSection}>
                   <Text style={[styles.productName, { color: theme.colors.text, fontSize: 16 }]} numberOfLines={1}>{pname}</Text>
@@ -484,24 +499,24 @@ export default function AffiliateCampaignsScreen() {
 
                 {/* Right: Actions */}
                 <View style={styles.desktopActionsSection}>
-                  <TouchableOpacity style={styles.desktopShareBtn} activeOpacity={0.85} onPress={() => Share.share({ message: `تفضل بزيارة الرابط للطلب:\n${link}`, url: link })}>
-                    <LinearGradient 
-                      colors={item.is_active ? ["#00B894", "#00CEA9"] : ["#9CA3AF", "#D1D5DB"]} 
-                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} 
+                  <TouchableOpacity style={styles.desktopShareBtn} activeOpacity={0.85} onPress={() => handleShare(link, `تفضل بزيارة الرابط للطلب:\n${link}`)}>
+                    <LinearGradient
+                      colors={item.is_active ? ["#00B894", "#00CEA9"] : ["#9CA3AF", "#D1D5DB"]}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                       style={styles.desktopShareGradient}
                     >
-                      <Ionicons name="share-social-outline" size={18} color="#FFF" />
+                      <Ionicons name="copy-outline" size={18} color="#FFF" />
                     </LinearGradient>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity onPress={() => toggleActive(item.id, item.is_active)} style={[styles.iconBtn, { backgroundColor: item.is_active ? theme.error + '15' : theme.primary + '15' }]}>
                     <Ionicons name={item.is_active ? "pause" : "play"} size={18} color={item.is_active ? theme.error : theme.primary} />
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity onPress={() => openEdit(item)} style={styles.iconBtn}>
                     <Ionicons name="create-outline" size={18} color={theme.colors.textSecondary} />
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity onPress={() => confirmDelete(item.id)} style={styles.iconBtn}>
                     <Ionicons name="trash-outline" size={18} color={theme.error} />
                   </TouchableOpacity>
@@ -551,11 +566,11 @@ export default function AffiliateCampaignsScreen() {
                     <Ionicons name={item.is_active ? "pause-circle-outline" : "play-circle-outline"} size={20} color={item.is_active ? theme.error : theme.primary} />
                     <Text style={[styles.actionBtnText, { color: item.is_active ? theme.error : theme.primary }]}>{item.is_active ? "توقيف" : "تفعيل"}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={{ flex: 1.5 }} activeOpacity={0.85} onPress={() => Share.share({ message: `تفضل بزيارة الرابط للطلب:\n${link}`, url: link })}>
+                  <TouchableOpacity style={{ flex: 1.5 }} activeOpacity={0.85} onPress={() => handleShare(link, `تفضل بزيارة الرابط للطلب:\n${link}`)}>
                     <LinearGradient colors={item.is_active ? ["#00B894", "#00CEA9"] : ["#9CA3AF", "#D1D5DB"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.shareGradient, { overflow: 'hidden' }]}>
                       {item.is_active && <ModernShimmer width={300} />}
-                      <Ionicons name="share-social-outline" size={20} color="#FFF" />
-                      <Text style={styles.shareBtnText}>مشاركة الصفحة</Text>
+                      <Ionicons name="copy-outline" size={20} color="#FFF" />
+                      <Text style={styles.shareBtnText}>نسخ الرابط</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -683,9 +698,9 @@ export default function AffiliateCampaignsScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 16 }}>
                   {imageUris.map((uri, index) => (
                     <View key={index} style={styles.imageEditThumb}>
-                      <Image 
-                        source={{ uri }} 
-                        style={styles.imageEditImg} 
+                      <Image
+                        source={{ uri }}
+                        style={styles.imageEditImg}
                         contentFit="cover"
                         transition={200}
                       />
@@ -738,7 +753,7 @@ export default function AffiliateCampaignsScreen() {
             ) : null}
 
             {step === 1 ? (
-              <Button title="التالي: التخصيص والتصميم" variant="gradient" onPress={validateStep1} style={{ width: '100%' }} icon="color-wand-outline" disabled={publishedProducts.length === 0 && !editingCampaignId} />
+              <Button title="التالي: التصميم" variant="gradient" onPress={validateStep1} style={{ width: '100%' }} icon="color-wand-outline" disabled={publishedProducts.length === 0 && !editingCampaignId} />
             ) : (
               <View style={styles.step2Buttons}>
                 <Button title="رجوع" variant="outline" onPress={() => { setModalError(""); LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setStep(1); }} style={{ flex: 1 }} />

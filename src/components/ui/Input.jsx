@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import Animated, { 
-  useSharedValue, 
-  useAnimatedStyle, 
-  withTiming, 
+import { View, TextInput, Text, StyleSheet, TouchableOpacity, Platform, I18nManager } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
   interpolateColor,
   FadeInUp
 } from 'react-native-reanimated';
@@ -13,8 +13,8 @@ import { spacing, typography, borderRadius } from '../../theme/theme';
 
 /**
  * Premium Solid Input component.
- * Upgraded with Reanimated for smooth background and border color interpolation,
- * and stable borders to prevent layout shifts.
+ * Features spacious geometric padding, RTL layout enforcement, 
+ * and ambient color transitions matching the new platform aesthetic.
  */
 export default function Input({
   label,
@@ -35,27 +35,40 @@ export default function Input({
   const [focused, setFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Premium Tokens
+  const COLORS = {
+    primary: '#2D6A4F',
+    primaryLight: 'rgba(116, 198, 157, 0.08)',
+    textMain: '#0F172A',
+    textMuted: '#475569',
+    textLight: '#94A3B8',
+    border: 'rgba(15, 23, 42, 0.08)',
+    bgWhite: '#FFFFFF',
+    bgMain: '#F8F9FA',
+    danger: '#EF4444',
+  };
+
   // High-performance shared value for focus state (0 = blurred, 1 = focused)
   const focusAnim = useSharedValue(0);
 
   React.useEffect(() => {
-    focusAnim.value = withTiming(focused ? 1 : 0, { duration: 250 });
+    focusAnim.value = withTiming(focused ? 1 : 0, { duration: 300 });
   }, [focused]);
 
   // Smoothly interpolate background and border colors on the UI thread
   const containerStyle = useAnimatedStyle(() => {
-    const borderColor = error 
-      ? theme.error 
+    const borderColor = error
+      ? COLORS.danger
       : interpolateColor(
-          focusAnim.value,
-          [0, 1],
-          [theme.colors.border, theme.primary]
-        );
+        focusAnim.value,
+        [0, 1],
+        [COLORS.border, COLORS.primary]
+      );
 
     const backgroundColor = interpolateColor(
       focusAnim.value,
       [0, 1],
-      [theme.colors.surface2, theme.colors.surface]
+      [theme.isDark ? '#1E293B' : COLORS.bgMain, theme.isDark ? '#0F172A' : COLORS.bgWhite]
     );
 
     return {
@@ -67,7 +80,7 @@ export default function Input({
   return (
     <View style={[styles.wrapper, style]}>
       {label && (
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+        <Text style={[styles.label, { color: theme.isDark ? '#CBD5E1' : COLORS.textMain }]}>
           {label}
         </Text>
       )}
@@ -75,14 +88,15 @@ export default function Input({
         style={[
           styles.container,
           containerStyle,
-          multiline ? { minHeight: Math.max(80, numberOfLines * 24), alignItems: 'flex-start' } : null,
+          focused && !error && styles.focusedShadow,
+          multiline ? { minHeight: Math.max(100, numberOfLines * 28), alignItems: 'flex-start' } : null,
         ]}
       >
         {icon && (
           <Ionicons
             name={icon}
-            size={20}
-            color={error ? theme.error : (focused ? theme.primary : theme.colors.textTertiary)}
+            size={22}
+            color={error ? COLORS.danger : (focused ? COLORS.primary : COLORS.textLight)}
             style={styles.icon}
           />
         )}
@@ -90,7 +104,7 @@ export default function Input({
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={theme.colors.textTertiary}
+          placeholderTextColor={COLORS.textLight}
           secureTextEntry={secureTextEntry && !showPassword}
           keyboardType={keyboardType}
           multiline={multiline}
@@ -98,11 +112,11 @@ export default function Input({
           editable={editable}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          selectionColor={theme.primary}
+          selectionColor={COLORS.primary}
           style={[
             styles.input,
-            { color: theme.colors.text },
-            multiline ? { textAlignVertical: 'top', paddingTop: 14 } : null,
+            { color: theme.isDark ? '#FFFFFF' : COLORS.textMain },
+            multiline ? { textAlignVertical: 'top', paddingTop: 18 } : null,
             inputStyle,
           ]}
         />
@@ -114,18 +128,18 @@ export default function Input({
           >
             <Ionicons
               name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-              size={20}
-              color={theme.colors.textTertiary}
+              size={22}
+              color={COLORS.textLight}
             />
           </TouchableOpacity>
         )}
       </Animated.View>
-      
+
       {/* Animated Error Entrance */}
       {error && (
-        <Animated.View entering={FadeInUp.duration(300).springify()} style={styles.errorContainer}>
-          <Ionicons name="alert-circle" size={14} color={theme.error} />
-          <Text style={[styles.error, { color: theme.error }]}>{error}</Text>
+        <Animated.View entering={FadeInUp.duration(400).springify()} style={styles.errorContainer}>
+          <Text style={[styles.error, { color: COLORS.danger }]}>{error}</Text>
+          <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
         </Animated.View>
       )}
     </View>
@@ -134,35 +148,46 @@ export default function Input({
 
 const styles = StyleSheet.create({
   wrapper: {
-    marginBottom: spacing.md,
+    marginBottom: 24,
     width: '100%',
   },
   label: {
-    ...typography.small,
-    fontFamily: 'Tajawal_700Bold',
-    marginBottom: 8,
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 16,
+    marginBottom: 10,
     marginEnd: 4,
     textAlign: 'right', // Force RTL alignment
     writingDirection: 'rtl',
     width: '100%',
   },
   container: {
-    flexDirection: 'row', // RTL alignment natively handled by I18nManager
+    flexDirection: Platform.OS === 'web' ? 'row' : 'row-reverse', // Strict visual RTL layout
     alignItems: 'center',
-    borderRadius: borderRadius.md,
+    borderRadius: 20, // Premium modern border radius
     paddingHorizontal: 16,
-    borderWidth: 1, // Fixed border width to prevent layout shifting
+    borderWidth: 1.5, // Thicker border for modern spatial feel
+    minHeight: 64, // Taller inputs for better touch targets
+    gap: 12,
     ...Platform.select({
-      web: { outlineStyle: 'none' },
+      web: { outlineStyle: 'none', transition: 'box-shadow 0.3s ease' },
     }),
   },
+  focusedShadow: {
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 4,
+  },
   icon: {
-    marginEnd: 12,
+    // Spacer handled by gap
   },
   input: {
     flex: 1,
-    ...typography.body,
-    paddingVertical: 14,
+    minWidth: 0, // Prevents flex overflow on Android
+    fontFamily: 'Tajawal_500Medium',
+    fontSize: 16,
+    paddingVertical: 16,
     textAlign: 'right', // Force Arabic alignment
     writingDirection: 'rtl',
   },
@@ -170,15 +195,15 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   errorContainer: {
-    flexDirection: 'row',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'row-reverse',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    marginTop: 6,
+    marginTop: 8,
     marginEnd: 4,
-    gap: 4,
+    gap: 6,
   },
   error: {
-    ...typography.caption,
-    fontFamily: 'Tajawal_500Medium',
+    fontFamily: 'Tajawal_700Bold',
+    fontSize: 14,
   },
 });

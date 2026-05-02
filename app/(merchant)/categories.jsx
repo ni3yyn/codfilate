@@ -7,28 +7,34 @@ import {
   RefreshControl,
   StyleSheet,
   Platform,
-  ActivityIndicator,
   useWindowDimensions,
   TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "../../src/hooks/useTheme";
 import { useStoreStore } from "../../src/stores/useStoreStore";
 import { useCategoryStore } from "../../src/stores/useCategoryStore";
 import { useAlertStore } from "../../src/stores/useAlertStore";
 import UniversalHeader from "../../src/components/ui/UniversalHeader";
 import Card from "../../src/components/ui/Card";
-import Button from "../../src/components/ui/Button";
 import EmptyState from "../../src/components/ui/EmptyState";
 import LoadingSpinner from "../../src/components/ui/LoadingSpinner";
-import {
-  typography,
-  spacing,
-  borderRadius,
-} from "../../src/theme/theme";
+import { spacing } from "../../src/theme/theme";
 import { PRESET_CATEGORIES, CATEGORY_THEMES } from "../../src/config/presetCategories";
+
+// Premium Tokens matching Cinematic UI
+const COLORS = {
+  primary: '#2D6A4F',
+  primaryHover: '#1B4332',
+  bgMain: '#F8F9FA',
+  bgWhite: '#FFFFFF',
+  textMain: '#0F172A',
+  textMuted: '#475569',
+  textLight: '#94A3B8',
+  border: 'rgba(15, 23, 42, 0.08)',
+  accentMint: '#74C69D',
+};
 
 export default function CategoriesScreen() {
   const theme = useTheme();
@@ -36,7 +42,6 @@ export default function CategoriesScreen() {
   const currentStore = useStoreStore((s) => s.currentStore);
   const { showAlert } = useAlertStore();
   const {
-    categories,
     storeCategories,
     isLoading,
     fetchStoreCategories,
@@ -44,18 +49,13 @@ export default function CategoriesScreen() {
   } = useCategoryStore();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [toggling, setToggling] = useState({});
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Optimistic UI State for ZERO delay multi-selection
+  const [localActiveIds, setLocalActiveIds] = useState(new Set());
 
   const storeId = currentStore?.id;
   const isWeb = Platform.OS === 'web';
-
-  const numColumns = useMemo(() => {
-    if (!isWeb) return 1;
-    if (width < 600) return 1;
-    if (width < 1000) return 2;
-    return 3;
-  }, [width, isWeb]);
 
   const loadData = useCallback(async () => {
     if (storeId) {
@@ -67,6 +67,23 @@ export default function CategoriesScreen() {
     loadData();
   }, [loadData]);
 
+  // Sync server state to local optimistic state whenever server data arrives
+  useEffect(() => {
+    const activeSet = new Set();
+    PRESET_CATEGORIES.forEach(item => {
+      const isActive = storeCategories.some(c => {
+        const dbCat = c.categories || c;
+        return (
+          dbCat.name_normalized === item.id ||
+          (dbCat.name_ar && dbCat.name_ar === item.name_ar) ||
+          (dbCat.id === item.id)
+        );
+      });
+      if (isActive) activeSet.add(item.id);
+    });
+    setLocalActiveIds(activeSet);
+  }, [storeCategories]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -76,8 +93,8 @@ export default function CategoriesScreen() {
   const groupedData = useMemo(() => {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      const filtered = PRESET_CATEGORIES.filter(cat => 
-        cat.id.toLowerCase().includes(query) || 
+      const filtered = PRESET_CATEGORIES.filter(cat =>
+        cat.id.toLowerCase().includes(query) ||
         (cat.name_ar && cat.name_ar.includes(query)) ||
         (cat.name_fr && cat.name_fr.toLowerCase().includes(query)) ||
         cat.name?.toLowerCase().includes(query)
@@ -95,83 +112,92 @@ export default function CategoriesScreen() {
     }));
   }, [searchQuery]);
 
-  const handleToggle = async (presetId, isActive) => {
-    try {
-      if (toggling[presetId]) return;
-      setToggling(prev => ({ ...prev, [presetId]: true }));
-      
-      const result = await toggleStoreCategory(storeId, presetId, !isActive);
-      
-      if (result.success) {
-        await fetchStoreCategories(storeId);
-      } else {
+  const handleToggle = (item) => {
+    const presetId = item.id;
+    const currentlyActive = localActiveIds.has(presetId);
+
+    // 1. Instantly update UI (Optimistic Update)
+    setLocalActiveIds(prev => {
+      const next = new Set(prev);
+      if (currentlyActive) next.delete(presetId);
+      else next.add(presetId);
+      return next;
+    });
+
+    // 2. Perform API call in background without blocking UI
+    toggleStoreCategory(storeId, presetId, !currentlyActive).then(result => {
+      if (!result.success) {
+        // Revert local state if API fails
+        setLocalActiveIds(prev => {
+          const next = new Set(prev);
+          if (currentlyActive) next.add(presetId); // Revert to true
+          else next.delete(presetId); // Revert to false
+          return next;
+        });
         showAlert({ title: "خطأ", message: result.error || "فشل تحديث التصنيف", type: "error" });
       }
-    } catch (error) {
-      console.error(error);
-      showAlert({ title: "خطأ", message: "حدث خطأ غير متوقع", type: "error" });
-    } finally {
-      setToggling(prev => ({ ...prev, [presetId]: false }));
-    }
+    });
   };
 
   const renderCategoryItem = (item) => {
-    const isActive = storeCategories.some(c => {
-      const dbCat = c.categories || c;
-      return (
-        dbCat.name_normalized === item.id || 
-        (dbCat.name_ar && dbCat.name_ar === item.name_ar) ||
-        (dbCat.id === item.id)
-      );
-    });
-    const isToggling = toggling[item.id];
+    const isActive = localActiveIds.has(item.id);
 
     return (
-      <View key={item.id} style={[styles.catCardWrapper, isWeb && styles.catCardWrapperWeb]}>
-        <Card
-          style={styles.catCard}
-          accentColor={isActive ? theme.primary : theme.colors.divider}
-          accentPosition="left"
+      <View key={item.id} style={[styles.catCardWrapper, isWeb && width >= 600 && styles.catCardWrapperWeb]}>
+        <TouchableOpacity
+          onPress={() => handleToggle(item)}
+          activeOpacity={0.8}
+          style={{ flex: 1 }}
         >
-          <View style={styles.catRow}>
-            <View style={[styles.catIcon, { backgroundColor: isActive ? theme.primary + "12" : theme.colors.surface2 }]}>
-              <Ionicons
-                name={item.icon || "layers-outline"}
-                size={22}
-                color={isActive ? theme.primary : theme.colors.textTertiary}
-              />
-            </View>
+          <Card
+            style={[
+              styles.catCard,
+              !isWeb && styles.catCardMobile,
+              { backgroundColor: theme.isDark ? (isActive ? 'rgba(45, 106, 79, 0.15)' : 'rgba(30, 41, 59, 0.7)') : (isActive ? 'rgba(116, 198, 157, 0.08)' : COLORS.bgWhite) },
+              { borderColor: theme.isDark ? (isActive ? 'rgba(116, 198, 157, 0.3)' : 'rgba(255, 255, 255, 0.05)') : (isActive ? COLORS.accentMint : COLORS.border) }
+            ]}
+            noPadding
+          >
+            <View style={styles.catRow}>
 
-            <View style={styles.catInfo}>
-              <Text style={[styles.catName, { color: theme.colors.text }]} numberOfLines={1}>
-                {item.name_ar || item.name}
-              </Text>
-              <Text style={[styles.catStatus, { color: isActive ? theme.primary : theme.colors.textTertiary }]}>
-                {isActive ? 'نشط' : 'غير مفعل'}
-              </Text>
-            </View>
+              {/* 1. RIGHT SIDE: Icon */}
+              <View style={[styles.catIcon, { backgroundColor: isActive ? COLORS.primary : (theme.isDark ? '#1E293B' : COLORS.bgMain) }]}>
+                <Ionicons
+                  name={item.icon || "layers-outline"}
+                  size={24}
+                  color={isActive ? COLORS.bgWhite : COLORS.textLight}
+                />
+              </View>
 
-            <View style={styles.actionArea}>
-              {isToggling ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <TouchableOpacity
-                  onPress={() => handleToggle(item.id, isActive)}
+              {/* 2. MIDDLE: Text Info */}
+              <View style={styles.catInfo}>
+                <Text style={[styles.catName, { color: theme.isDark ? '#FFFFFF' : COLORS.textMain }]} numberOfLines={1}>
+                  {item.name_ar || item.name}
+                </Text>
+                <Text style={[styles.catStatus, { color: isActive ? COLORS.primary : (theme.isDark ? '#94A3B8' : COLORS.textLight) }]}>
+                  {isActive ? 'نشط ومفعل' : 'غير مفعل'}
+                </Text>
+              </View>
+
+              {/* 3. LEFT SIDE: Action Button */}
+              <View style={styles.actionArea}>
+                <View
                   style={[
                     styles.toggleIconButton,
-                    { backgroundColor: isActive ? theme.primary : theme.colors.surface2 }
+                    { backgroundColor: isActive ? COLORS.primary : (theme.isDark ? '#334155' : COLORS.bgMain) }
                   ]}
                 >
-                  <Ionicons 
-                    name={isActive ? "checkmark-circle" : "add-circle-outline"} 
-                    size={24} 
-                    color={isActive ? "#fff" : theme.colors.textTertiary} 
+                  <Ionicons
+                    name={isActive ? "checkmark" : "add"}
+                    size={20}
+                    color={isActive ? COLORS.bgWhite : COLORS.textLight}
                   />
-                </TouchableOpacity>
-              )}
+                </View>
+              </View>
+
             </View>
-          </View>
-        </Card>
+          </Card>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -180,13 +206,13 @@ export default function CategoriesScreen() {
     <View style={styles.themeSection}>
       {item.type === 'theme' && (
         <View style={styles.themeHeader}>
-          <Ionicons name={item.icon} size={20} color={theme.primary} />
-          <Text style={[styles.themeTitle, { color: theme.colors.text }]}>
+          <Ionicons name={item.icon} size={22} color={COLORS.primary} />
+          <Text style={[styles.themeTitle, { color: theme.isDark ? '#FFFFFF' : COLORS.textMain }]}>
             {item.name_ar}
           </Text>
         </View>
       )}
-      <View style={styles.themeGrid}>
+      <View style={[styles.themeGrid, !isWeb && styles.themeGridMobile]}>
         {item.categories.map(cat => renderCategoryItem(cat))}
       </View>
     </View>
@@ -194,7 +220,7 @@ export default function CategoriesScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.safe, { backgroundColor: theme.colors.background }]}
+      style={[styles.safe, { backgroundColor: theme.isDark ? '#0A0A1A' : COLORS.bgMain }]}
       edges={["bottom"]}
     >
       <UniversalHeader
@@ -202,14 +228,18 @@ export default function CategoriesScreen() {
         subtitle="اختر التصنيفات الدقيقة التي تناسب تخصص متجرك"
       />
 
-      <View style={styles.contentContainer}>
-        <View style={[styles.searchSection, { backgroundColor: theme.colors.surface }]}>
-          <View style={[styles.searchBar, { borderColor: theme.colors.divider }]}>
-            <Ionicons name="search-outline" size={20} color={theme.colors.textTertiary} />
+      <View style={[styles.contentContainer, isWeb && width >= 600 && { maxWidth: 1000, alignSelf: 'center', width: '100%' }]}>
+        <View style={[
+          styles.searchSection,
+          Platform.OS === 'web' && { className: 'glass-panel' },
+          { backgroundColor: theme.isDark ? "rgba(30, 41, 59, 0.8)" : COLORS.bgWhite, borderColor: theme.isDark ? "rgba(255, 255, 255, 0.05)" : COLORS.border }
+        ]}>
+          <View style={styles.searchBar}>
+            <Ionicons name="search-outline" size={20} color={COLORS.textLight} />
             <TextInput
-              style={[styles.searchInput, { color: theme.colors.text }]}
+              style={[styles.searchInput, { color: theme.isDark ? '#FFFFFF' : COLORS.textMain }]}
               placeholder="ابحث عن تخصص (مثال: فساتين)..."
-              placeholderTextColor={theme.colors.textTertiary}
+              placeholderTextColor={COLORS.textLight}
               value={searchQuery}
               onChangeText={setSearchQuery}
               clearButtonMode="while-editing"
@@ -226,7 +256,7 @@ export default function CategoriesScreen() {
             keyExtractor={(item, index) => item.id || index.toString()}
             contentContainerStyle={styles.list}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />
             }
             ListEmptyComponent={
               <EmptyState
@@ -250,37 +280,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchSection: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     marginHorizontal: spacing.md,
-    marginTop: -20,
+    marginTop: -24,
     borderRadius: 20,
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowColor: COLORS.primaryHover,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
     zIndex: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    height: 48,
-    borderRadius: 14,
+    height: 44,
   },
   searchInput: {
     flex: 1,
     paddingHorizontal: spacing.sm,
     fontFamily: 'Tajawal_500Medium',
-    fontSize: 15,
-    textAlign: 'right',
+    fontSize: 16,
+    textAlign: 'right', // Forces correct Arabic alignment
   },
   list: {
     padding: spacing.md,
     paddingTop: 30,
-    paddingBottom: 100,
+    paddingBottom: 120, // Enough bottom padding to clear the FloatingTabBar
   },
   themeSection: {
     marginBottom: spacing.xl,
@@ -293,64 +321,72 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   themeTitle: {
-    fontFamily: 'Tajawal_700Bold',
-    fontSize: 18,
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 20,
+    letterSpacing: -0.3,
   },
   themeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  themeGridMobile: {
+    flexDirection: 'column',
+    flexWrap: 'nowrap',
+  },
   catCardWrapper: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     width: '100%',
   },
   catCardWrapperWeb: {
-    width: Platform.OS === 'web' ? '50%' : '100%',
+    width: '50%',
     paddingHorizontal: spacing.xs,
   },
   catCard: {
-    padding: spacing.md,
-    borderRadius: 24,
-    height: 90, 
+    padding: 16,
+    borderRadius: 24, // Premium cinematic radius
+    borderWidth: 1.5,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.03)',
+  },
+  catCardMobile: {
+    height: 'auto',
+    minHeight: 80,
   },
   catRow: {
-    flexDirection: "row-reverse",
+    flexDirection: "row-reverse", // STRICT RTL: Renders Icon(Right) -> Text(Mid) -> Button(Left)
     alignItems: "center",
   },
   catIcon: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   catInfo: {
     flex: 1,
     marginHorizontal: spacing.md,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start', // Aligns to the natural RTL start (right visually)
   },
   catName: {
     fontFamily: 'Tajawal_700Bold',
-    fontSize: 15,
-    marginBottom: 2,
+    fontSize: 16,
+    marginBottom: 4,
+    textAlign: 'right',
   },
   catStatus: {
     fontFamily: 'Tajawal_500Medium',
-    fontSize: 11,
+    fontSize: 12,
+    textAlign: 'right',
   },
   actionArea: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   toggleIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: 'rgba(255,255,255,0.05)',
   },
 });

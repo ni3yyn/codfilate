@@ -3,11 +3,20 @@ import { View, StyleSheet, Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../hooks/useTheme';
-import { borderRadius, spacing, shadows } from '../../theme/theme';
+import { spacing } from '../../theme/theme';
+
+// Premium Tokens matching Cinematic UI
+const COLORS = {
+  primary: '#2D6A4F',
+  primaryHover: '#1B4332',
+  bgWhite: '#FFFFFF',
+  textMain: '#0F172A',
+  border: 'rgba(15, 23, 42, 0.08)',
+};
 
 /**
  * Premium Solid Card component. 
- * Re-architected for Reanimated performance, unified gradient layers, and true RTL accents.
+ * Features smooth glassmorphic borders, prestige cinematic shapes, and true RTL accents.
  */
 export default function Card({
   children,
@@ -26,24 +35,31 @@ export default function Card({
   // Unified gradient configuration
   const hasGradient = gradient || !!gradientColors;
   const gradientProps = hasGradient ? {
-    colors: gradientColors || [theme.primary, theme.primaryLight],
+    colors: gradientColors || [COLORS.primaryHover, COLORS.primary],
     start: { x: 0, y: 0 },
     end: { x: 1, y: 1 }
   } : null;
 
-  // Premium Border & Shadow Architecture
+  // Premium Border Architecture
   const cardBorder = borderVariant === 'none'
     ? 'transparent'
     : theme.isDark
-      ? 'rgba(255, 255, 255, 0.08)' // Crisp hairline contrast for dark mode
-      : 'rgba(0, 0, 0, 0.04)';      // Soft ambient contrast for light mode
+      ? 'rgba(255, 255, 255, 0.06)' // Crisp hairline contrast for dark mode
+      : COLORS.border;            // Soft ambient contrast for light mode
 
-  const cardShadow = elevated ? (theme.isDark ? shadows.glow : shadows.md) : {};
+  // High-End Cinematic Shadow
+  const cardShadow = elevated ? {
+    shadowColor: theme.isDark ? '#000' : COLORS.primaryHover,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: theme.isDark ? 0.3 : 0.08,
+    shadowRadius: 25,
+    elevation: 8,
+  } : {};
 
   // Comprehensive Accent Positioning (RTL-aware)
   const getAccentStyle = () => {
     if (!accentColor) return null;
-    
+
     const baseAccent = {
       position: 'absolute',
       backgroundColor: accentColor,
@@ -77,7 +93,7 @@ export default function Card({
 
   const borderStyle = {
     borderColor: cardBorder,
-    borderWidth: borderVariant === 'thick' ? 2 : (Platform.OS === 'web' ? 1 : StyleSheet.hairlineWidth),
+    borderWidth: borderVariant === 'thick' ? 2 : 1.5, // Thicker default border for glassmorphic spatial feel
   };
 
   return (
@@ -87,7 +103,9 @@ export default function Card({
         styles.card,
         borderStyle,
         cardShadow,
-        { backgroundColor: hasGradient ? 'transparent' : theme.colors.card },
+        elevated && { borderRadius: 30 }, // Larger radius for floating cards
+        Platform.OS === 'web' && { className: 'glass-panel' },
+        { backgroundColor: hasGradient ? 'transparent' : (theme.isDark ? 'rgba(30, 41, 59, 0.7)' : COLORS.bgWhite) },
         style,
       ]}
     >
@@ -109,7 +127,7 @@ export default function Card({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: borderRadius.lg,
+    borderRadius: 24, // Premium soft radius
     overflow: 'hidden',
     position: 'relative',
   },
@@ -118,6 +136,6 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   padding: {
-    padding: spacing.md,
+    padding: 24, // Spacious padding
   },
 });

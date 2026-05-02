@@ -264,21 +264,21 @@ export default function OrdersScreen() {
         {/* Quick Summary Dashboard */}
         <View style={styles.statsRow}>
           <View style={[styles.statCard, { backgroundColor: theme.colors.surface }]}>
-            <Ionicons name="layers-outline" size={20} color={theme.colors.textSecondary} style={styles.statIcon} />
+            <Ionicons name="layers-outline" size={18} color={theme.colors.textSecondary} style={styles.statIcon} />
             <View style={styles.statTextWrap}>
               <Text style={[styles.statValue, { color: theme.colors.text }]}>{stats.total}</Text>
               <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>الكل</Text>
             </View>
           </View>
           <View style={[styles.statCard, { backgroundColor: '#F2994A15' }]}>
-            <Ionicons name="time-outline" size={20} color="#F2994A" style={styles.statIcon} />
+            <Ionicons name="time-outline" size={18} color="#F2994A" style={styles.statIcon} />
             <View style={styles.statTextWrap}>
               <Text style={[styles.statValue, { color: '#F2994A' }]}>{stats.pending}</Text>
               <Text style={[styles.statLabel, { color: '#F2994A' }]}>معلق</Text>
             </View>
           </View>
           <View style={[styles.statCard, { backgroundColor: '#21965315' }]}>
-            <Ionicons name="checkmark-done-outline" size={20} color="#219653" style={styles.statIcon} />
+            <Ionicons name="checkmark-done-outline" size={18} color="#219653" style={styles.statIcon} />
             <View style={styles.statTextWrap}>
               <Text style={[styles.statValue, { color: '#219653' }]}>{stats.delivered}</Text>
               <Text style={[styles.statLabel, { color: '#219653' }]}>تم التوصيل</Text>
@@ -307,7 +307,7 @@ export default function OrdersScreen() {
           )}
         </View>
 
-        {/* Horizontal Status Filters */}
+        {/* Horizontal Status Filters (Inversed Scroll Direction for RTL) */}
         <View>
           <ScrollView
             horizontal
@@ -333,7 +333,7 @@ export default function OrdersScreen() {
                     name={f.icon}
                     size={16}
                     color={isSelected ? '#FFF' : theme.colors.textSecondary}
-                    style={{ marginStart: 6 }} // Arabic RTL spacing
+                    style={{ marginStart: 6 }}
                   />
                   <Text style={[styles.filterLabel, { color: isSelected ? '#FFF' : theme.colors.textSecondary }]}>
                     {f.label}
@@ -377,18 +377,19 @@ const styles = StyleSheet.create({
   contentWrapper: { flex: 1 },
   contentWrapperWide: { maxWidth: 1200, width: '100%', alignSelf: 'center' },
 
-  // Dashboard Stats
+  // Dashboard Stats (Smaller footprints)
   statsRow: {
     flexDirection: 'row-reverse',
     paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+    gap: 8,
     marginBottom: spacing.sm,
   },
   statCard: {
     flex: 1,
     flexDirection: 'row-reverse',
     alignItems: 'center',
-    padding: spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderRadius: borderRadius.md,
     elevation: 2,
     shadowColor: '#000',
@@ -396,10 +397,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
   },
-  statIcon: { marginEnd: spacing.sm },
+  statIcon: { marginEnd: 6 },
   statTextWrap: { flex: 1, alignItems: 'flex-start' }, // Right aligned conceptually due to row-reverse
-  statValue: { ...typography.h3, fontFamily: 'Tajawal_700Bold', lineHeight: 28 },
-  statLabel: { ...typography.caption, fontFamily: 'Tajawal_500Medium' },
+  statValue: { fontSize: 18, fontFamily: 'Tajawal_700Bold', lineHeight: 22 },
+  statLabel: { fontSize: 11, fontFamily: 'Tajawal_500Medium' },
 
   // Search Bar
   searchWrapper: {
@@ -420,12 +421,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Tajawal_500Medium',
   },
 
-  // Filters
+  // Filters (Direction changed to row so it natively flows right-to-left in RTL mode)
   filterScroll: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
     gap: spacing.sm,
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
   },
   filterPill: {
     flexDirection: 'row-reverse',

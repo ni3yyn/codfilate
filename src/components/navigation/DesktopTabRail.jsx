@@ -1,23 +1,33 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   Platform,
   StyleSheet,
-  Animated,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
 import { useTheme } from '../../hooks/useTheme';
-import { typography, spacing, borderRadius } from '../../theme/theme';
+import { typography, spacing } from '../../theme/theme';
 
-const RAIL_WIDTH = 260; // Slightly wider for more clarity
+const RAIL_WIDTH = 260;
+
+// Premium Tokens matching the Cinematic UI
+const COLORS = {
+  primary: '#2D6A4F',
+  primaryHover: '#1B4332',
+  bgMain: '#F8F9FA',
+  bgWhite: '#FFFFFF',
+  textMain: '#0F172A',
+  textLight: '#94A3B8',
+  border: 'rgba(15, 23, 42, 0.08)',
+};
 
 /**
  * Vertical navigation for wide layouts (web / tablets).
+ * Features a static layout (no scroll) with clean active state indications.
  */
 export default function DesktopTabRail({ basePath, items }) {
   const theme = useTheme();
@@ -39,36 +49,34 @@ export default function DesktopTabRail({ basePath, items }) {
         styles.rail,
         {
           width: RAIL_WIDTH,
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.isDark ? '#0A0A1A' : COLORS.bgMain, // Match root background
           borderEndWidth: 1,
-          borderEndColor: theme.colors.border,
-          paddingTop: Math.max(insets.top, 20),
-          paddingBottom: Math.max(insets.bottom, 20),
+          borderEndColor: theme.isDark ? 'rgba(255,255,255,0.05)' : COLORS.border,
+          paddingTop: Math.max(insets.top, 24),
+          paddingBottom: Math.max(insets.bottom, 24),
         },
       ]}
     >
+      {/* Brand Header */}
       <View style={styles.header}>
-        <View style={[styles.logoCircle, { backgroundColor: theme.primary + '15' }]}>
-          <Text style={[styles.logoText, { color: theme.primary }]}>C</Text>
+        <View style={[styles.logoCircle, { backgroundColor: COLORS.primary }]}>
+          <Ionicons name="local-fire-department" size={24} color={COLORS.bgWhite} />
         </View>
-        <Text style={[styles.appName, { color: theme.colors.text }]}>CODFILATE</Text>
+        <Text style={[styles.appName, { color: theme.isDark ? COLORS.bgWhite : COLORS.primary }]}>كودفيلات</Text>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scrollContent}
-      >
+      {/* Static Tabs Container (No ScrollView, all visible at once) */}
+      <View style={styles.tabsContainer}>
         {items.map((item) => {
           const focused = active === item.name;
           const iconName = focused ? item.icon : `${item.icon}-outline`;
-          
+
           return (
             <TouchableOpacity
               key={item.name}
               style={[
                 styles.row,
-                focused && { backgroundColor: theme.primary + '10' },
+                focused && { backgroundColor: theme.isDark ? 'rgba(45, 106, 79, 0.2)' : 'rgba(116, 198, 157, 0.15)' },
                 webCursor,
               ]}
               onPress={() => go(item.name)}
@@ -76,17 +84,18 @@ export default function DesktopTabRail({ basePath, items }) {
               accessibilityRole="button"
               accessibilityState={{ selected: focused }}
             >
-              {focused && <View style={[styles.indicator, { backgroundColor: theme.primary }]} />}
-              
+              {/* Clean Active Indicator Bar */}
+              {focused && <View style={[styles.indicator, { backgroundColor: COLORS.primary }]} />}
+
               <Ionicons
                 name={iconName}
                 size={22}
-                color={focused ? theme.primary : theme.colors.textSecondary}
+                color={focused ? COLORS.primary : (theme.isDark ? '#94A3B8' : COLORS.textLight)}
               />
               <Text
                 style={[
                   styles.label,
-                  { color: focused ? theme.primary : theme.colors.textSecondary },
+                  { color: focused ? COLORS.primary : (theme.isDark ? '#CBD5E1' : COLORS.textMain) },
                   focused && styles.labelFocused,
                 ]}
                 numberOfLines={1}
@@ -96,10 +105,11 @@ export default function DesktopTabRail({ basePath, items }) {
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
-      <View style={styles.footer}>
-        <Text style={[styles.version, { color: theme.colors.textTertiary }]}>v1.2.0 • Premium</Text>
+      {/* Footer Info */}
+      <View style={[styles.footer, { borderTopColor: theme.isDark ? 'rgba(255,255,255,0.05)' : COLORS.border }]}>
+        <Text style={[styles.version, { color: theme.isDark ? '#64748B' : COLORS.textLight }]}>نسخة 1.2.0 • قيد التطوير</Text>
       </View>
     </View>
   );
@@ -109,69 +119,72 @@ const styles = StyleSheet.create({
   rail: {
     flexShrink: 0,
     height: '100%',
+    justifyContent: 'space-between', // Pushes header/tabs up and footer down
   },
   header: {
-    flexDirection: 'row',
+    flexDirection: 'row', // Strict RTL for Logo
     alignItems: 'center',
     paddingHorizontal: 24,
     marginBottom: 40,
     gap: 12,
   },
   logoCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  logoText: {
-    fontFamily: 'Tajawal_800ExtraBold',
-    fontSize: 18,
+    shadowColor: COLORS.primaryHover,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 5,
   },
   appName: {
-    fontFamily: 'Tajawal_800ExtraBold',
-    fontSize: 18,
-    letterSpacing: 1,
+    fontFamily: 'Tajawal_900Black',
+    fontSize: 22,
+    letterSpacing: -0.5,
+    textAlign: 'right',
   },
-  scrollContent: {
+  tabsContainer: {
+    flex: 1, // Takes up remaining space
     paddingVertical: spacing.xs,
     gap: 8,
   },
   row: {
-    flexDirection: 'row-reverse', // Align items for Arabic (icon on right, text on left)
+    flexDirection: 'row-reverse', // Strict RTL (icon right, text left)
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
+    gap: 16,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    marginHorizontal: 12,
-    borderRadius: 12,
+    marginHorizontal: 16,
+    borderRadius: 16, // Premium pill shape
     position: 'relative',
   },
   indicator: {
     position: 'absolute',
-    left: -12, // Inner edge for RTL (sidebar on the right)
-    top: 12,
-    bottom: 12,
+    right: 0, // Indicator on the right edge for RTL layout
+    top: '25%',
+    bottom: '25%',
     width: 4,
-    borderTopEndRadius: 4,
-    borderBottomEndRadius: 4,
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
   },
   label: {
-    ...typography.body,
+    fontFamily: 'Tajawal_500Medium',
     flex: 1,
     textAlign: 'right',
-    fontSize: 15,
+    fontSize: 16,
   },
   labelFocused: {
-    fontFamily: 'Tajawal_700Bold',
+    fontFamily: 'Tajawal_800ExtraBold', // Heavy focus font
   },
   footer: {
     padding: 24,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.03)',
   },
   version: {
-    ...typography.small,
+    fontFamily: 'Tajawal_500Medium',
+    fontSize: 12,
     textAlign: 'center',
   },
 });

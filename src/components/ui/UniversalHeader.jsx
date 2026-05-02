@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,13 +12,102 @@ import DesktopNotificationsPopover from './DesktopNotificationsPopover';
 import { typography, spacing, borderRadius } from '../../theme/theme';
 
 /**
+ * Premium Marquee Text Component
+ * Automatically detects if text overflows the container and smoothly scrolls it (ping-pong style).
+ */
+const MarqueeText = ({ text, style }) => {
+  const [containerWidth, setContainerWidth] = React.useState(0);
+  const [textWidth, setTextWidth] = React.useState(0);
+  const translateX = React.useRef(new Animated.Value(0)).current;
+  const GAP = 30; // space between the two copies
+
+  React.useEffect(() => {
+    let animRef;
+    if (textWidth > containerWidth && containerWidth > 0) {
+      const distance = textWidth + GAP;
+      const duration = (distance / 30) * 1000; // Dynamic speed based on length
+
+      const runAnimation = () => {
+        translateX.setValue(0);
+        animRef = Animated.timing(translateX, {
+          toValue: distance, // Pan Right for RTL overflow
+          duration: duration,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        });
+        animRef.start(({ finished }) => {
+          if (finished) runAnimation();
+        });
+      };
+
+      const delayTimeout = setTimeout(() => {
+        runAnimation();
+      }, 1000);
+
+      return () => {
+        clearTimeout(delayTimeout);
+        if (animRef) animRef.stop();
+        translateX.setValue(0);
+      };
+    } else {
+      translateX.setValue(0);
+    }
+  }, [textWidth, containerWidth, text]);
+
+  const isOverflowing = textWidth > containerWidth && containerWidth > 0;
+
+  return (
+    <View
+      style={{ width: '100%', overflow: 'hidden', flexDirection: 'row-reverse', justifyContent: isOverflowing ? 'flex-start' : 'center', alignItems: 'center', position: 'relative' }}
+      onLayout={(e) => setContainerWidth(Math.round(e.nativeEvent.layout.width))}
+    >
+      {/* Hidden placeholder to force container height when absolute */}
+      {isOverflowing && (
+        <Text style={[style, { opacity: 0 }]} pointerEvents="none" numberOfLines={1}>
+          {text}
+        </Text>
+      )}
+
+      <Animated.View style={{ 
+        flexDirection: 'row-reverse', 
+        alignItems: 'center',
+        ...(isOverflowing ? { position: 'absolute', right: 0 } : {}),
+        transform: [{ translateX }] 
+      }}>
+        <Text
+          onLayout={(e) => setTextWidth(Math.round(e.nativeEvent.layout.width))}
+          style={[style, Platform.OS === 'web' && { whiteSpace: 'nowrap' }]}
+          numberOfLines={isOverflowing ? 1 : undefined}
+        >
+          {text}
+        </Text>
+
+        {isOverflowing && (
+          <>
+            <View style={{ width: GAP }} />
+            <Text
+              style={[style, Platform.OS === 'web' && { whiteSpace: 'nowrap' }]}
+              numberOfLines={1}
+            >
+              {text}
+            </Text>
+          </>
+        )}
+      </Animated.View>
+    </View>
+  );
+};
+
+/**
  * Universal premium header with Glassmorphism support.
- * @param {string} title - Main page title
- * @param {string} subtitle - Optional secondary text
- * @param {React.ReactNode} rightAction - Custom components for the left/right side (depending on RTL)
+ * Upgraded with centered titles, smart marquee scrolling, and cinematic spatial layout.
+ * 
+ * @param {string} title - Main page title (Absolutely centered, auto-scrolls if long)
+ * @param {string} subtitle - Optional secondary text (Auto-scrolls if long)
+ * @param {React.ReactNode} rightAction - Custom components for the left/right side
  * @param {boolean} showSearch - Whether to show the search icon
  * @param {Function} onSearchPress - Handler for search icon press
- * @param {boolean} showAvatar - Whether to show user avatar/profile info
+ * @param {boolean} showAvatar - Whether to show user avatar
  */
 export default function UniversalHeader({
   title,
@@ -41,7 +130,7 @@ export default function UniversalHeader({
   React.useEffect(() => {
     if (profile?.user_id) {
       console.log('[Realtime] Subscribing for user:', profile.user_id);
-      
+
       const showBrowserNotification = (notif) => {
         if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
           new Notification(notif.title || 'تنبيه جديد', {
@@ -85,11 +174,11 @@ export default function UniversalHeader({
 
   // Entrance animation for title
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const slideAnim = React.useRef(new Animated.Value(8)).current;
+  const slideAnim = React.useRef(new Animated.Value(6)).current; // Reduced travel distance for snappier feel
 
   React.useEffect(() => {
     fadeAnim.setValue(0);
-    slideAnim.setValue(8);
+    slideAnim.setValue(6);
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -98,36 +187,26 @@ export default function UniversalHeader({
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        friction: 8,
-        tension: 50,
+        friction: 7,
+        tension: 60,
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start();
   }, [title]);
 
-  // Identity Role formatting
-  const getRoleLabel = (role) => {
-    switch (role) {
-      case 'developer': return 'المطوّر';
-      case 'admin': return 'مدير النظام';
-      case 'merchant': return 'تاجر';
-      case 'affiliate': return 'مسوق';
-      case 'regional_manager': return 'مدير إقليمي';
-      case 'delivery': return 'توصيل';
-      default: return 'مستخدم';
-    }
-  };
+  // Extract first name for a cleaner "Welcome" message
+  const firstName = profile?.full_name ? profile.full_name.split(' ')[0] : 'مستخدم';
 
   return (
-    <LinearGradient 
+    <LinearGradient
       colors={[theme.primary, theme.primaryDark]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[
-        styles.container, 
-        { 
-          borderBottomLeftRadius: borderRadius.xl,
-          borderBottomRightRadius: borderRadius.xl,
+        styles.container,
+        {
+          borderBottomLeftRadius: 24, // Premium soft radius
+          borderBottomRightRadius: 24,
           shadowColor: theme.primaryDark,
         }
       ]}
@@ -139,46 +218,54 @@ export default function UniversalHeader({
           { paddingHorizontal: isWide ? contentPadding : spacing.md }
         ]}>
           <View style={styles.contentRow}>
-            
-            {/* Identity Group (Avatar + Name) */}
-            {showAvatar ? (
-              <View style={styles.identityGroup}>
-                <View style={[styles.avatarCircle, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-                   {profile?.avatar_url ? (
-                     <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
-                   ) : (
-                     <Ionicons name="person" size={18} color="#FFFFFF" />
-                   )}
-                </View>
-                <View style={styles.identityText}>
-                  <Text style={[styles.userName, { color: '#FFFFFF' }]} numberOfLines={1}>
-                    {profile?.full_name || 'مستخدم جديد'}
-                  </Text>
-                  <Text style={[styles.userRole, { color: 'rgba(255,255,255,0.8)' }]}>
-                    {getRoleLabel(profile?.role)}
-                  </Text>
-                </View>
-              </View>
-            ) : (
-              <Animated.View style={[styles.titleOnly, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-                <Text style={[styles.mainTitle, { color: '#FFFFFF' }]}>{title}</Text>
-                {subtitle && <Text style={[styles.mainSubtitle, { color: 'rgba(255,255,255,0.8)' }]}>{subtitle}</Text>}
-              </Animated.View>
-            )}
 
-            {/* Actions Group */}
+            {/* ABSOLUTE CENTERED TITLE with Smart Marquee Scrolling */}
+            <Animated.View
+              style={[
+                StyleSheet.absoluteFill,
+                styles.absoluteCenter,
+                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+              ]}
+              pointerEvents="none"
+            >
+              {title && <MarqueeText text={title} style={styles.centerTitle} />}
+              {subtitle && <MarqueeText text={subtitle} style={styles.centerSubtitle} />}
+            </Animated.View>
+
+            {/* LEFT SIDE: Identity Group (Avatar + Conditional Welcome Text) */}
+            <View style={styles.identityGroup}>
+              {showAvatar && (
+                <>
+                  <View style={[styles.avatarCircle, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
+                    {profile?.avatar_url ? (
+                      <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
+                    ) : (
+                      <Ionicons name="person" size={16} color="#FFFFFF" />
+                    )}
+                  </View>
+                  {/* Only show welcome text on tablet/desktop to save space on mobile */}
+                  {isWide && (
+                    <Text style={styles.welcomeText} numberOfLines={1}>
+                      مرحباً، {firstName}
+                    </Text>
+                  )}
+                </>
+              )}
+            </View>
+
+            {/* RIGHT SIDE: Actions Group */}
             <View style={styles.actionsGroup}>
               {showSearch && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={onSearchPress}
-                  style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.15)' }]}
+                  style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.12)' }]}
                 >
                   <Ionicons name="search" size={18} color="#FFFFFF" />
                 </TouchableOpacity>
               )}
               <View style={{ zIndex: 2000 }}>
-                <TouchableOpacity 
-                  style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.18)' }]}
+                <TouchableOpacity
+                  style={[styles.actionIcon, { backgroundColor: 'rgba(255,255,255,0.12)' }]}
                   activeOpacity={0.7}
                   onPress={() => {
                     if (isWide) {
@@ -188,28 +275,28 @@ export default function UniversalHeader({
                     }
                   }}
                 >
-                  <Animated.View style={{ 
-                    transform: [{ 
+                  <Animated.View style={{
+                    transform: [{
                       rotate: shakeAnim.interpolate({
                         inputRange: [-1, 1],
                         outputRange: ['-15deg', '15deg']
-                      }) 
-                    }] 
+                      })
+                    }]
                   }}>
-                    <Ionicons 
-                      name={unreadCount > 0 ? "notifications" : "notifications-outline"} 
-                      size={20} 
-                      color="#FFFFFF" 
+                    <Ionicons
+                      name={unreadCount > 0 ? "notifications" : "notifications-outline"}
+                      size={20}
+                      color="#FFFFFF"
                     />
                   </Animated.View>
                   {unreadCount > 0 && (
-                    <View style={[styles.notifBadge, { backgroundColor: theme.error }]} />
+                    <View style={[styles.notifBadge, { backgroundColor: '#EF4444' }]} />
                   )}
                 </TouchableOpacity>
                 {isWide && (
-                  <DesktopNotificationsPopover 
-                    isVisible={isNotificationsOpen} 
-                    onClose={() => setIsNotificationsOpen(false)} 
+                  <DesktopNotificationsPopover
+                    isVisible={isNotificationsOpen}
+                    onClose={() => setIsNotificationsOpen(false)}
                   />
                 )}
               </View>
@@ -218,20 +305,13 @@ export default function UniversalHeader({
 
           </View>
 
-          {/* Contextual Title or Action Hint */}
-          {((showAvatar && title) || actionHint) ? (
-            <Animated.View style={[styles.pageTitleRow, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-               {title && <Text style={[styles.h1, { color: '#FFFFFF' }]}>{title}</Text>}
-               {subtitle && <Text style={[styles.hSub, { color: 'rgba(255,255,255,0.7)' }]}>{subtitle}</Text>}
-               
-               {actionHint && (
-                 <View style={styles.hintContainer}>
-                    <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.9)" />
-                    <Text style={styles.hintText}>{actionHint}</Text>
-                 </View>
-               )}
+          {/* Optional Action Hint underneath (only shows if passed) */}
+          {actionHint && (
+            <Animated.View style={[styles.hintContainer, { opacity: fadeAnim }]}>
+              <Ionicons name="information-circle-outline" size={14} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.hintText}>{actionHint}</Text>
             </Animated.View>
-          ) : null}
+          )}
 
           {children}
         </View>
@@ -242,28 +322,59 @@ export default function UniversalHeader({
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: spacing.sm,
+    paddingBottom: 6, // Reduced height for leaner header
     ...Platform.select({
-      ios: { shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 },
+      ios: { shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 12 },
       android: { elevation: 8 },
       web: { position: 'sticky', top: 0, zIndex: 100 }
     }),
   },
   safeArea: {},
   inner: {
-    paddingVertical: spacing.sm,
+    paddingVertical: 8, // Tighter padding for height reduction
   },
   contentRow: {
-    flexDirection: 'row',
+    flexDirection: 'row', // Maintained direction as requested
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 44,
-    zIndex: 100, // Significantly higher than page content
+    height: 40, // Reduced from 44 to 40
+    zIndex: 100,
+    position: 'relative', // Allows the absolute title to anchor correctly
   },
+
+  // Absolute Centered Title Logic
+  absoluteCenter: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1, // Below the Left/Right actions so it doesn't block taps
+    paddingHorizontal: 80, // Forces constraints so it won't touch side icons
+    top: 6, // Pushes title to the bottom a little bit
+  },
+  centerTitle: {
+    fontFamily: 'Tajawal_800ExtraBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+    lineHeight: 28,
+    paddingTop: 6,
+    paddingBottom: 0,
+  },
+  centerSubtitle: {
+    fontFamily: 'Tajawal_500Medium',
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingTop: 4,
+    paddingBottom: 10,
+  },
+  // Identity Group (Left Side)
   identityGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    zIndex: 10, // Ensure it's clickable above the absolute title
   },
   avatarCircle: {
     width: 32,
@@ -277,22 +388,29 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  identityText: {
-    alignItems: 'flex-start',
-  },
-  userName: {
-    ...typography.bodyBold,
-    fontSize: 14,
-  },
-  userRole: {
-    ...typography.small,
-    fontSize: 10,
-    marginTop: -2,
+  welcomeText: {
     fontFamily: 'Tajawal_700Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+
+  // Actions Group (Right Side)
+  actionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 10, // Ensure it's clickable above the absolute title
+  },
+  actionIcon: {
+    width: 36, // Slightly smaller for height reduction
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   notifBadge: {
     position: 'absolute',
-    top: 6,
+    top: 4,
     right: 6,
     width: 10,
     height: 10,
@@ -300,61 +418,25 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     zIndex: 10,
-    elevation: 4, // Added for Android
+    elevation: 4,
   },
-  titleOnly: {
-    alignItems: 'flex-start',
-  },
-  mainTitle: {
-    ...typography.h3,
-  },
-  mainSubtitle: {
-    ...typography.caption,
-    fontSize: 12,
-  },
-  actionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pageTitleRow: {
-    marginTop: spacing.xs,
-    alignItems: 'flex-start',
-    zIndex: 1,
-  },
-  h1: {
-    ...typography.h3,
-    fontSize: 20,
-    letterSpacing: -0.3,
-  },
-  hSub: {
-    ...typography.caption,
-    fontSize: 13,
-    marginTop: -2,
-    textAlign: 'right',
-  },
+
+  // Contextual Action Hint
   hintContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    marginTop: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    marginTop: 8,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'center', // Centered for balance
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
   },
   hintText: {
-    ...typography.small,
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.9)',
     fontFamily: 'Tajawal_700Bold',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.95)',
   },
 });
